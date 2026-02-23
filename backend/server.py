@@ -220,7 +220,7 @@ async def get_petition_signatures():
 
 # ============ ADMIN AUTH ============
 
-ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'legacyvault2k')
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'A@070610')
 
 @api_router.post("/admin/login")
 async def admin_login(login_data: AdminLogin):
