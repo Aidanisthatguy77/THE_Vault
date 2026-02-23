@@ -1958,6 +1958,7 @@ const AdminPage = () => {
 
         {activeTab === 'games' && <GamesManagement />}
         {activeTab === 'clips' && <ClipsManagement />}
+        {activeTab === 'mockups' && <MockupsManagement />}
         {activeTab === 'proof' && <ProofManagement />}
         {activeTab === 'content' && <ContentManagement />}
         {activeTab === 'comments' && <CommentsManagement />}
