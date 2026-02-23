@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { Lock, LogOut, Plus, Pencil, Trash2, Eye, EyeOff, ArrowLeft, Users, Mail, Gamepad2, MessageSquare, Trophy, RefreshCw, UserPlus } from "lucide-react";
+import { Lock, LogOut, Plus, Pencil, Trash2, Eye, EyeOff, ArrowLeft, Users, Mail, Gamepad2, MessageSquare, Trophy, RefreshCw, UserPlus, Video, Youtube, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -149,7 +150,6 @@ const GameFormModal = ({ game, open, onClose, onSave }) => {
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 className="bg-black border-white/20 text-white"
-                data-testid="game-title-input"
               />
             </div>
             <div>
@@ -159,7 +159,6 @@ const GameFormModal = ({ game, open, onClose, onSave }) => {
                 value={formData.year}
                 onChange={(e) => setFormData({ ...formData, year: e.target.value })}
                 className="bg-black border-white/20 text-white"
-                data-testid="game-year-input"
               />
             </div>
           </div>
@@ -171,7 +170,6 @@ const GameFormModal = ({ game, open, onClose, onSave }) => {
               value={formData.cover_image}
               onChange={(e) => setFormData({ ...formData, cover_image: e.target.value })}
               className="bg-black border-white/20 text-white"
-              data-testid="game-image-input"
             />
             {formData.cover_image && (
               <img src={formData.cover_image} alt="Preview" className="mt-2 w-32 h-auto rounded" />
@@ -185,7 +183,6 @@ const GameFormModal = ({ game, open, onClose, onSave }) => {
               value={formData.hook_text}
               onChange={(e) => setFormData({ ...formData, hook_text: e.target.value })}
               className="bg-black border-white/20 text-white"
-              data-testid="game-hook-input"
             />
           </div>
 
@@ -196,7 +193,6 @@ const GameFormModal = ({ game, open, onClose, onSave }) => {
               value={formData.cover_athletes}
               onChange={(e) => setFormData({ ...formData, cover_athletes: e.target.value })}
               className="bg-black border-white/20 text-white"
-              data-testid="game-athletes-input"
             />
           </div>
 
@@ -207,18 +203,16 @@ const GameFormModal = ({ game, open, onClose, onSave }) => {
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className="bg-black border-white/20 text-white min-h-[120px]"
-              data-testid="game-description-input"
             />
           </div>
 
           <div>
-            <label className="text-white/70 text-sm mb-1 block">YouTube Embed URL</label>
+            <label className="text-white/70 text-sm mb-1 block">Main YouTube Embed URL (optional)</label>
             <Input
               placeholder="https://www.youtube.com/embed/..."
               value={formData.youtube_embed}
               onChange={(e) => setFormData({ ...formData, youtube_embed: e.target.value })}
               className="bg-black border-white/20 text-white"
-              data-testid="game-youtube-input"
             />
           </div>
 
@@ -230,7 +224,6 @@ const GameFormModal = ({ game, open, onClose, onSave }) => {
                 value={formData.order}
                 onChange={(e) => setFormData({ ...formData, order: parseInt(e.target.value) || 0 })}
                 className="bg-black border-white/20 text-white"
-                data-testid="game-order-input"
               />
             </div>
             <div className="flex items-center gap-2 pt-6">
@@ -239,7 +232,6 @@ const GameFormModal = ({ game, open, onClose, onSave }) => {
                 checked={formData.is_active}
                 onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
                 className="w-4 h-4 accent-[#C8102E]"
-                data-testid="game-active-checkbox"
               />
               <label className="text-white/70">Active (visible on site)</label>
             </div>
@@ -249,7 +241,7 @@ const GameFormModal = ({ game, open, onClose, onSave }) => {
             <Button type="button" variant="outline" onClick={onClose} className="border-white/20 text-white hover:bg-white/10">
               Cancel
             </Button>
-            <Button type="submit" disabled={loading} className="btn-primary" data-testid="save-game-btn">
+            <Button type="submit" disabled={loading} className="btn-primary">
               {loading ? 'Saving...' : (game ? 'Update Game' : 'Create Game')}
             </Button>
           </DialogFooter>
@@ -310,7 +302,7 @@ const GamesManagement = () => {
     <div data-testid="games-management">
       <div className="flex justify-between items-center mb-6">
         <h2 className="font-heading text-2xl font-bold text-white uppercase">Manage Games ({games.length})</h2>
-        <Button onClick={() => { setEditGame(null); setShowForm(true); }} className="btn-primary" data-testid="add-game-btn">
+        <Button onClick={() => { setEditGame(null); setShowForm(true); }} className="btn-primary">
           <Plus size={18} className="mr-2" /> Add Game
         </Button>
       </div>
@@ -320,7 +312,7 @@ const GamesManagement = () => {
           <p className="text-white/50 text-center py-8">No games yet. Add your first game!</p>
         ) : (
           games.map((game) => (
-            <div key={game.id} className={`bg-black p-4 rounded-md border ${game.is_active ? 'border-white/10' : 'border-white/5 opacity-60'} flex items-center gap-4`} data-testid={`admin-game-${game.id}`}>
+            <div key={game.id} className={`bg-black p-4 rounded-md border ${game.is_active ? 'border-white/10' : 'border-white/5 opacity-60'} flex items-center gap-4`}>
               <img src={game.cover_image} alt={game.title} className="w-16 h-20 object-cover rounded" />
               <div className="flex-1 min-w-0">
                 <h3 className="font-heading text-lg font-bold text-white">{game.title}</h3>
@@ -328,13 +320,13 @@ const GamesManagement = () => {
                 <p className="text-[#C8102E] text-sm truncate">{game.hook_text}</p>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" onClick={() => toggleActive(game)} className="text-white/60 hover:text-white" data-testid={`toggle-active-${game.id}`}>
+                <Button variant="ghost" size="icon" onClick={() => toggleActive(game)} className="text-white/60 hover:text-white">
                   {game.is_active ? <Eye size={18} /> : <EyeOff size={18} />}
                 </Button>
-                <Button variant="ghost" size="icon" onClick={() => { setEditGame(game); setShowForm(true); }} className="text-white/60 hover:text-white" data-testid={`edit-game-${game.id}`}>
+                <Button variant="ghost" size="icon" onClick={() => { setEditGame(game); setShowForm(true); }} className="text-white/60 hover:text-white">
                   <Pencil size={18} />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={() => setDeleteConfirm(game)} className="text-white/60 hover:text-[#C8102E]" data-testid={`delete-game-${game.id}`}>
+                <Button variant="ghost" size="icon" onClick={() => setDeleteConfirm(game)} className="text-white/60 hover:text-[#C8102E]">
                   <Trash2 size={18} />
                 </Button>
               </div>
@@ -350,7 +342,6 @@ const GamesManagement = () => {
         onSave={fetchGames}
       />
 
-      {/* Delete Confirmation */}
       <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
         <DialogContent className="bg-[#09090B] border-white/10">
           <DialogHeader>
@@ -361,10 +352,307 @@ const GamesManagement = () => {
             <Button variant="outline" onClick={() => setDeleteConfirm(null)} className="border-white/20 text-white hover:bg-white/10">
               Cancel
             </Button>
-            <Button onClick={() => handleDelete(deleteConfirm?.id)} className="bg-[#C8102E] hover:bg-red-700" data-testid="confirm-delete-btn">
+            <Button onClick={() => handleDelete(deleteConfirm?.id)} className="bg-[#C8102E] hover:bg-red-700">
               Delete
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+// Clips Management - NEW!
+const ClipsManagement = () => {
+  const [games, setGames] = useState([]);
+  const [clips, setClips] = useState([]);
+  const [selectedGame, setSelectedGame] = useState('all');
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editClip, setEditClip] = useState(null);
+  const [formData, setFormData] = useState({
+    game_id: '',
+    title: '',
+    platform: 'youtube',
+    embed_url: '',
+    description: '',
+    order: 0
+  });
+
+  const fetchData = async () => {
+    try {
+      const [gamesRes, clipsRes] = await Promise.all([
+        axios.get(`${API}/games/all`),
+        axios.get(`${API}/clips`)
+      ]);
+      setGames(gamesRes.data);
+      setClips(clipsRes.data);
+    } catch (error) {
+      toast.error("Failed to fetch data");
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const filteredClips = selectedGame === 'all' 
+    ? clips 
+    : clips.filter(c => c.game_id === selectedGame);
+
+  const getGameTitle = (gameId) => {
+    const game = games.find(g => g.id === gameId);
+    return game ? game.title : 'Unknown Game';
+  };
+
+  const getPlatformIcon = (platform) => {
+    switch(platform) {
+      case 'youtube': return <Youtube size={16} className="text-red-500" />;
+      case 'tiktok': return <Play size={16} className="text-pink-500" />;
+      default: return <Video size={16} className="text-white/60" />;
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.game_id || !formData.title || !formData.embed_url) {
+      toast.error("Game, title, and embed URL are required");
+      return;
+    }
+
+    try {
+      if (editClip) {
+        await axios.put(`${API}/clips/${editClip.id}`, formData);
+        toast.success("Clip updated!");
+      } else {
+        await axios.post(`${API}/clips`, formData);
+        toast.success("Clip added!");
+      }
+      setShowForm(false);
+      setEditClip(null);
+      setFormData({ game_id: '', title: '', platform: 'youtube', embed_url: '', description: '', order: 0 });
+      fetchData();
+    } catch (error) {
+      toast.error("Failed to save clip");
+    }
+  };
+
+  const handleEdit = (clip) => {
+    setEditClip(clip);
+    setFormData({
+      game_id: clip.game_id,
+      title: clip.title,
+      platform: clip.platform,
+      embed_url: clip.embed_url,
+      description: clip.description || '',
+      order: clip.order || 0
+    });
+    setShowForm(true);
+  };
+
+  const handleDelete = async (clipId) => {
+    if (!window.confirm("Delete this clip?")) return;
+    try {
+      await axios.delete(`${API}/clips/${clipId}`);
+      toast.success("Clip deleted!");
+      fetchData();
+    } catch (error) {
+      toast.error("Failed to delete clip");
+    }
+  };
+
+  const openAddForm = () => {
+    setEditClip(null);
+    setFormData({ 
+      game_id: selectedGame !== 'all' ? selectedGame : '', 
+      title: '', 
+      platform: 'youtube', 
+      embed_url: '', 
+      description: '', 
+      order: 0 
+    });
+    setShowForm(true);
+  };
+
+  if (loading) {
+    return <div className="spinner mx-auto mt-8"></div>;
+  }
+
+  return (
+    <div data-testid="clips-management">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div>
+          <h2 className="font-heading text-2xl font-bold text-white uppercase">Media & Clips ({clips.length})</h2>
+          <p className="text-white/60 text-sm">Add YouTube, TikTok, Instagram clips for each game</p>
+        </div>
+        <Button onClick={openAddForm} className="btn-primary">
+          <Plus size={18} className="mr-2" /> Add Clip
+        </Button>
+      </div>
+
+      {/* Filter by Game */}
+      <div className="mb-6 flex items-center gap-3">
+        <span className="text-white/70">Filter by game:</span>
+        <Select value={selectedGame} onValueChange={setSelectedGame}>
+          <SelectTrigger className="w-[200px] bg-black border-white/20 text-white">
+            <SelectValue placeholder="All Games" />
+          </SelectTrigger>
+          <SelectContent className="bg-[#09090B] border-white/10">
+            <SelectItem value="all" className="text-white hover:bg-white/10">All Games</SelectItem>
+            {games.map(game => (
+              <SelectItem key={game.id} value={game.id} className="text-white hover:bg-white/10">
+                {game.title}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* How to get embed URLs */}
+      <div className="bg-[#09090B] p-4 rounded-md border border-white/10 mb-6">
+        <h3 className="font-heading text-lg font-bold text-white uppercase mb-2">How to Add Clips</h3>
+        <div className="text-white/70 text-sm space-y-2">
+          <p><strong className="text-[#C8102E]">YouTube:</strong> Go to video → Share → Embed → Copy the URL from src="..."</p>
+          <p className="text-white/50 text-xs">Example: https://www.youtube.com/embed/VIDEO_ID</p>
+          <p><strong className="text-[#C8102E]">TikTok:</strong> Go to video → Share → Embed → Copy the video URL</p>
+          <p className="text-white/50 text-xs">Example: https://www.tiktok.com/embed/v2/VIDEO_ID</p>
+          <p><strong className="text-[#C8102E]">Instagram:</strong> Go to post → ⋯ → Embed → Copy URL</p>
+          <p><strong className="text-[#C8102E]">Twitter/X:</strong> Use the tweet URL directly</p>
+        </div>
+      </div>
+
+      {/* Clips List */}
+      {filteredClips.length === 0 ? (
+        <p className="text-white/50 text-center py-8">No clips yet. Add your first clip!</p>
+      ) : (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredClips.map(clip => (
+            <div key={clip.id} className="bg-black p-4 rounded-md border border-white/10">
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  {getPlatformIcon(clip.platform)}
+                  <span className="text-white/60 text-xs uppercase">{clip.platform}</span>
+                </div>
+                <div className="flex gap-1">
+                  <Button variant="ghost" size="icon" onClick={() => handleEdit(clip)} className="h-6 w-6 text-white/60 hover:text-white">
+                    <Pencil size={14} />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleDelete(clip.id)} className="h-6 w-6 text-white/60 hover:text-[#C8102E]">
+                    <Trash2 size={14} />
+                  </Button>
+                </div>
+              </div>
+              <h4 className="font-bold text-white mb-1">{clip.title}</h4>
+              <p className="text-[#C8102E] text-xs mb-2">{getGameTitle(clip.game_id)}</p>
+              {clip.description && (
+                <p className="text-white/60 text-sm mb-2 line-clamp-2">{clip.description}</p>
+              )}
+              <div className="aspect-video bg-[#09090B] rounded overflow-hidden">
+                <iframe
+                  src={clip.embed_url}
+                  title={clip.title}
+                  className="w-full h-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                ></iframe>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add/Edit Clip Modal */}
+      <Dialog open={showForm} onOpenChange={() => { setShowForm(false); setEditClip(null); }}>
+        <DialogContent className="bg-[#09090B] border-white/10 max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-2xl font-bold text-white uppercase">
+              {editClip ? 'Edit Clip' : 'Add New Clip'}
+            </DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+            <div>
+              <label className="text-white/70 text-sm mb-1 block">Game *</label>
+              <Select value={formData.game_id} onValueChange={(v) => setFormData({...formData, game_id: v})}>
+                <SelectTrigger className="bg-black border-white/20 text-white">
+                  <SelectValue placeholder="Select a game" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#09090B] border-white/10">
+                  {games.map(game => (
+                    <SelectItem key={game.id} value={game.id} className="text-white hover:bg-white/10">
+                      {game.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="text-white/70 text-sm mb-1 block">Platform *</label>
+              <Select value={formData.platform} onValueChange={(v) => setFormData({...formData, platform: v})}>
+                <SelectTrigger className="bg-black border-white/20 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-[#09090B] border-white/10">
+                  <SelectItem value="youtube" className="text-white hover:bg-white/10">YouTube</SelectItem>
+                  <SelectItem value="tiktok" className="text-white hover:bg-white/10">TikTok</SelectItem>
+                  <SelectItem value="instagram" className="text-white hover:bg-white/10">Instagram</SelectItem>
+                  <SelectItem value="twitter" className="text-white hover:bg-white/10">Twitter/X</SelectItem>
+                  <SelectItem value="other" className="text-white hover:bg-white/10">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="text-white/70 text-sm mb-1 block">Title *</label>
+              <Input
+                placeholder="Epic dunk compilation"
+                value={formData.title}
+                onChange={(e) => setFormData({...formData, title: e.target.value})}
+                className="bg-black border-white/20 text-white"
+              />
+            </div>
+
+            <div>
+              <label className="text-white/70 text-sm mb-1 block">Embed URL *</label>
+              <Input
+                placeholder="https://www.youtube.com/embed/..."
+                value={formData.embed_url}
+                onChange={(e) => setFormData({...formData, embed_url: e.target.value})}
+                className="bg-black border-white/20 text-white"
+              />
+            </div>
+
+            <div>
+              <label className="text-white/70 text-sm mb-1 block">Description (optional)</label>
+              <Textarea
+                placeholder="What's in this clip..."
+                value={formData.description}
+                onChange={(e) => setFormData({...formData, description: e.target.value})}
+                className="bg-black border-white/20 text-white min-h-[80px]"
+              />
+            </div>
+
+            <div>
+              <label className="text-white/70 text-sm mb-1 block">Display Order</label>
+              <Input
+                type="number"
+                value={formData.order}
+                onChange={(e) => setFormData({...formData, order: parseInt(e.target.value) || 0})}
+                className="bg-black border-white/20 text-white w-24"
+              />
+            </div>
+
+            <DialogFooter className="pt-4">
+              <Button type="button" variant="outline" onClick={() => setShowForm(false)} className="border-white/20 text-white hover:bg-white/10">
+                Cancel
+              </Button>
+              <Button type="submit" className="btn-primary">
+                {editClip ? 'Update Clip' : 'Add Clip'}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
@@ -435,7 +723,6 @@ const CommentsManagement = () => {
                 </Button>
               </div>
 
-              {/* Replies */}
               {comment.replies && comment.replies.length > 0 && (
                 <div className="mt-3 ml-6 space-y-2 border-l-2 border-[#C8102E]/30 pl-4">
                   {comment.replies.map((reply) => (
@@ -631,10 +918,9 @@ const PetitionManagement = () => {
         </div>
       </div>
 
-      {/* Bulk Add Section */}
       <div className="bg-[#09090B] p-4 rounded-md border border-[#C8102E]/30 mb-6">
         <h3 className="font-heading text-lg font-bold text-white uppercase mb-3">Boost Social Proof</h3>
-        <p className="text-white/60 text-sm mb-4">Add fake signatures to boost the counter (for demo/social proof purposes)</p>
+        <p className="text-white/60 text-sm mb-4">Add signatures to boost the counter</p>
         <div className="flex gap-3 items-center">
           <Input
             type="number"
@@ -650,7 +936,6 @@ const PetitionManagement = () => {
         </div>
       </div>
 
-      {/* Recent Signatures */}
       <h3 className="font-heading text-lg font-bold text-white uppercase mb-3">Recent Signatures (showing last 50)</h3>
       {signatures.length === 0 ? (
         <p className="text-white/50 text-center py-8">No signatures yet.</p>
@@ -683,7 +968,6 @@ const PetitionManagement = () => {
         </div>
       )}
 
-      {/* Add Single Signature Modal */}
       <Dialog open={showAddForm} onOpenChange={setShowAddForm}>
         <DialogContent className="bg-[#09090B] border-white/10">
           <DialogHeader>
@@ -728,7 +1012,6 @@ const AdminPage = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [activeTab, setActiveTab] = useState('games');
 
-  // Check if already logged in (session storage)
   useEffect(() => {
     const loggedIn = sessionStorage.getItem('adminLoggedIn');
     if (loggedIn === 'true') {
@@ -752,6 +1035,7 @@ const AdminPage = () => {
 
   const tabs = [
     { id: 'games', label: 'Games', icon: Gamepad2 },
+    { id: 'clips', label: 'Clips', icon: Video },
     { id: 'comments', label: 'Comments', icon: MessageSquare },
     { id: 'subscribers', label: 'Subscribers', icon: Mail },
     { id: 'petition', label: 'Petition', icon: Trophy },
@@ -759,41 +1043,37 @@ const AdminPage = () => {
 
   return (
     <div className="min-h-screen bg-black" data-testid="admin-dashboard">
-      {/* Header */}
       <header className="bg-[#09090B] border-b border-white/10 py-4 px-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <a href="/" className="text-white/60 hover:text-white flex items-center gap-2" data-testid="back-to-site">
+            <a href="/" className="text-white/60 hover:text-white flex items-center gap-2">
               <ArrowLeft size={18} />
               <span className="hidden sm:inline">Back to Site</span>
             </a>
             <div className="w-px h-6 bg-white/10"></div>
             <h1 className="font-heading text-xl font-bold text-white uppercase">Full Admin Control</h1>
           </div>
-          <Button variant="ghost" onClick={handleLogout} className="text-white/60 hover:text-white" data-testid="logout-btn">
+          <Button variant="ghost" onClick={handleLogout} className="text-white/60 hover:text-white">
             <LogOut size={18} className="mr-2" /> Logout
           </Button>
         </div>
       </header>
 
-      {/* Content */}
       <div className="max-w-7xl mx-auto p-6">
-        {/* Tabs */}
         <div className="flex flex-wrap gap-2 mb-8 border-b border-white/10 pb-4">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-sm font-medium transition-colors ${activeTab === tab.id ? 'bg-[#C8102E] text-white' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
-              data-testid={`tab-${tab.id}`}
             >
               <tab.icon size={18} /> {tab.label}
             </button>
           ))}
         </div>
 
-        {/* Tab Content */}
         {activeTab === 'games' && <GamesManagement />}
+        {activeTab === 'clips' && <ClipsManagement />}
         {activeTab === 'comments' && <CommentsManagement />}
         {activeTab === 'subscribers' && <SubscriptionsManagement />}
         {activeTab === 'petition' && <PetitionManagement />}
