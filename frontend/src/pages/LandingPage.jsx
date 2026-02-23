@@ -532,6 +532,22 @@ const CommentsSection = () => {
     setLoading(false);
   };
 
+  const handleLike = async (commentId) => {
+    try {
+      const response = await axios.post(`${API}/comments/${commentId}/like`);
+      // Update local state
+      setComments(prev => prev.map(c => {
+        if (c.id === commentId) return { ...c, likes: response.data.likes };
+        if (c.replies) {
+          return { ...c, replies: c.replies.map(r => r.id === commentId ? { ...r, likes: response.data.likes } : r) };
+        }
+        return c;
+      }));
+    } catch (error) {
+      console.error('Error liking:', error);
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto" data-testid="comments-section">
       <h3 className="font-heading text-2xl font-bold text-white uppercase mb-6">Join the Discussion</h3>
@@ -571,17 +587,32 @@ const CommentsSection = () => {
           comments.map((comment) => (
             <div key={comment.id} className="comment-item rounded-md" data-testid={`comment-${comment.id}`}>
               <div className="flex justify-between items-start mb-2">
-                <span className="font-bold text-white">{comment.author_name}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-white">{comment.author_name}</span>
+                  {comment.is_admin && (
+                    <span className="bg-[#C8102E] text-white text-xs px-2 py-0.5 rounded font-bold">ADMIN</span>
+                  )}
+                </div>
                 <span className="text-white/40 text-sm">{new Date(comment.created_at).toLocaleDateString()}</span>
               </div>
               <p className="text-white/80 mb-3">{comment.content}</p>
-              <button 
-                onClick={() => setReplyTo(replyTo === comment.id ? null : comment.id)}
-                className="text-[#C8102E] text-sm hover:underline"
-                data-testid={`reply-btn-${comment.id}`}
-              >
-                Reply
-              </button>
+              <div className="flex items-center gap-4">
+                <button 
+                  onClick={() => handleLike(comment.id)}
+                  className="flex items-center gap-1 text-white/60 hover:text-[#C8102E] transition-colors"
+                  data-testid={`like-btn-${comment.id}`}
+                >
+                  <Heart size={16} className={comment.likes > 0 ? 'fill-[#C8102E] text-[#C8102E]' : ''} />
+                  <span className="text-sm">{comment.likes || 0}</span>
+                </button>
+                <button 
+                  onClick={() => setReplyTo(replyTo === comment.id ? null : comment.id)}
+                  className="text-[#C8102E] text-sm hover:underline"
+                  data-testid={`reply-btn-${comment.id}`}
+                >
+                  Reply
+                </button>
+              </div>
 
               {/* Reply Form */}
               {replyTo === comment.id && (
@@ -610,10 +641,22 @@ const CommentsSection = () => {
                   {comment.replies.map((reply) => (
                     <div key={reply.id} className="reply-item" data-testid={`reply-${reply.id}`}>
                       <div className="flex justify-between items-start mb-1">
-                        <span className="font-bold text-white text-sm">{reply.author_name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-white text-sm">{reply.author_name}</span>
+                          {reply.is_admin && (
+                            <span className="bg-[#C8102E] text-white text-xs px-1.5 py-0.5 rounded font-bold text-[10px]">ADMIN</span>
+                          )}
+                        </div>
                         <span className="text-white/40 text-xs">{new Date(reply.created_at).toLocaleDateString()}</span>
                       </div>
                       <p className="text-white/70 text-sm">{reply.content}</p>
+                      <button 
+                        onClick={() => handleLike(reply.id)}
+                        className="flex items-center gap-1 text-white/60 hover:text-[#C8102E] transition-colors mt-1"
+                      >
+                        <Heart size={14} className={reply.likes > 0 ? 'fill-[#C8102E] text-[#C8102E]' : ''} />
+                        <span className="text-xs">{reply.likes || 0}</span>
+                      </button>
                     </div>
                   ))}
                 </div>
