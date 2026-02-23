@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { Lock, LogOut, Plus, Pencil, Trash2, Eye, EyeOff, ArrowLeft, Users, Mail, Gamepad2 } from "lucide-react";
+import { Lock, LogOut, Plus, Pencil, Trash2, Eye, EyeOff, ArrowLeft, Users, Mail, Gamepad2, MessageSquare, Trophy, RefreshCw, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -309,7 +309,7 @@ const GamesManagement = () => {
   return (
     <div data-testid="games-management">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="font-heading text-2xl font-bold text-white uppercase">Manage Games</h2>
+        <h2 className="font-heading text-2xl font-bold text-white uppercase">Manage Games ({games.length})</h2>
         <Button onClick={() => { setEditGame(null); setShowForm(true); }} className="btn-primary" data-testid="add-game-btn">
           <Plus size={18} className="mr-2" /> Add Game
         </Button>
@@ -371,32 +371,150 @@ const GamesManagement = () => {
   );
 };
 
-// Subscriptions List
-const SubscriptionsList = () => {
+// Comments Management
+const CommentsManagement = () => {
+  const [comments, setComments] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchComments = async () => {
+    try {
+      const response = await axios.get(`${API}/comments`);
+      setComments(response.data);
+    } catch (error) {
+      console.error('Error:', error);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchComments();
+  }, []);
+
+  const handleDelete = async (commentId) => {
+    if (!window.confirm("Delete this comment and all its replies?")) return;
+    try {
+      await axios.delete(`${API}/comments/${commentId}`);
+      toast.success("Comment deleted!");
+      fetchComments();
+    } catch (error) {
+      toast.error("Failed to delete comment");
+    }
+  };
+
+  if (loading) {
+    return <div className="spinner mx-auto mt-8"></div>;
+  }
+
+  const totalComments = comments.reduce((acc, c) => acc + 1 + (c.replies?.length || 0), 0);
+
+  return (
+    <div data-testid="comments-management">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="font-heading text-2xl font-bold text-white uppercase">Manage Comments ({totalComments})</h2>
+        <Button onClick={fetchComments} variant="outline" className="border-white/20 text-white hover:bg-white/10">
+          <RefreshCw size={18} className="mr-2" /> Refresh
+        </Button>
+      </div>
+
+      {comments.length === 0 ? (
+        <p className="text-white/50 text-center py-8">No comments yet.</p>
+      ) : (
+        <div className="space-y-4">
+          {comments.map((comment) => (
+            <div key={comment.id} className="bg-black p-4 rounded-md border border-white/10">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-bold text-white">{comment.author_name}</span>
+                    <span className="text-white/40 text-sm">{new Date(comment.created_at).toLocaleString()}</span>
+                  </div>
+                  <p className="text-white/80">{comment.content}</p>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => handleDelete(comment.id)} className="text-white/60 hover:text-[#C8102E]">
+                  <Trash2 size={18} />
+                </Button>
+              </div>
+
+              {/* Replies */}
+              {comment.replies && comment.replies.length > 0 && (
+                <div className="mt-3 ml-6 space-y-2 border-l-2 border-[#C8102E]/30 pl-4">
+                  {comment.replies.map((reply) => (
+                    <div key={reply.id} className="flex justify-between items-start">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-white text-sm">{reply.author_name}</span>
+                          <span className="text-white/40 text-xs">{new Date(reply.created_at).toLocaleString()}</span>
+                        </div>
+                        <p className="text-white/70 text-sm">{reply.content}</p>
+                      </div>
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(reply.id)} className="text-white/60 hover:text-[#C8102E] h-6 w-6">
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Subscriptions Management
+const SubscriptionsManagement = () => {
   const [subscriptions, setSubscriptions] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchSubs = async () => {
+    try {
+      const response = await axios.get(`${API}/subscriptions`);
+      setSubscriptions(response.data);
+    } catch (error) {
+      console.error('Error:', error);
+    }
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const fetchSubs = async () => {
-      try {
-        const response = await axios.get(`${API}/subscriptions`);
-        setSubscriptions(response.data);
-      } catch (error) {
-        console.error('Error:', error);
-      }
-      setLoading(false);
-    };
     fetchSubs();
   }, []);
+
+  const handleDelete = async (subId) => {
+    if (!window.confirm("Delete this subscription?")) return;
+    try {
+      await axios.delete(`${API}/subscriptions/${subId}`);
+      toast.success("Subscription deleted!");
+      fetchSubs();
+    } catch (error) {
+      toast.error("Failed to delete subscription");
+    }
+  };
+
+  const exportEmails = () => {
+    const emails = subscriptions.map(s => s.email).join('\n');
+    const blob = new Blob([emails], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'legacy-vault-subscribers.txt';
+    a.click();
+    toast.success("Emails exported!");
+  };
 
   if (loading) {
     return <div className="spinner mx-auto mt-8"></div>;
   }
 
   return (
-    <div data-testid="subscriptions-list">
-      <h2 className="font-heading text-2xl font-bold text-white uppercase mb-6">Email Subscribers</h2>
-      <p className="text-white/60 mb-4">Total: {subscriptions.length} subscribers</p>
+    <div data-testid="subscriptions-management">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="font-heading text-2xl font-bold text-white uppercase">Email Subscribers ({subscriptions.length})</h2>
+        <Button onClick={exportEmails} className="btn-primary" disabled={subscriptions.length === 0}>
+          Export Emails
+        </Button>
+      </div>
       
       {subscriptions.length === 0 ? (
         <p className="text-white/50 text-center py-8">No subscribers yet.</p>
@@ -407,6 +525,7 @@ const SubscriptionsList = () => {
               <tr>
                 <th className="text-left text-white/70 font-medium p-3">Email</th>
                 <th className="text-left text-white/70 font-medium p-3">Date</th>
+                <th className="text-right text-white/70 font-medium p-3">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -414,12 +533,192 @@ const SubscriptionsList = () => {
                 <tr key={sub.id} className="border-t border-white/5">
                   <td className="text-white p-3">{sub.email}</td>
                   <td className="text-white/60 p-3">{new Date(sub.subscribed_at).toLocaleDateString()}</td>
+                  <td className="text-right p-3">
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(sub.id)} className="text-white/60 hover:text-[#C8102E]">
+                      <Trash2 size={16} />
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+    </div>
+  );
+};
+
+// Petition Management
+const PetitionManagement = () => {
+  const [signatures, setSignatures] = useState([]);
+  const [count, setCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [bulkCount, setBulkCount] = useState(100);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newSig, setNewSig] = useState({ name: '', location: '' });
+
+  const fetchData = async () => {
+    try {
+      const [sigsRes, countRes] = await Promise.all([
+        axios.get(`${API}/petition/signatures`),
+        axios.get(`${API}/petition/count`)
+      ]);
+      setSignatures(sigsRes.data);
+      setCount(countRes.data.count);
+    } catch (error) {
+      console.error('Error:', error);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleDelete = async (sigId) => {
+    if (!window.confirm("Delete this signature?")) return;
+    try {
+      await axios.delete(`${API}/petition/${sigId}`);
+      toast.success("Signature deleted!");
+      fetchData();
+    } catch (error) {
+      toast.error("Failed to delete signature");
+    }
+  };
+
+  const handleAddBulk = async () => {
+    try {
+      await axios.post(`${API}/petition/add-bulk?count=${bulkCount}`);
+      toast.success(`Added ${bulkCount} signatures!`);
+      fetchData();
+    } catch (error) {
+      toast.error("Failed to add signatures");
+    }
+  };
+
+  const handleAddSingle = async (e) => {
+    e.preventDefault();
+    if (!newSig.name.trim()) {
+      toast.error("Name is required");
+      return;
+    }
+    try {
+      await axios.post(`${API}/petition/sign`, { name: newSig.name, location: newSig.location || null });
+      toast.success("Signature added!");
+      setNewSig({ name: '', location: '' });
+      setShowAddForm(false);
+      fetchData();
+    } catch (error) {
+      toast.error("Failed to add signature");
+    }
+  };
+
+  if (loading) {
+    return <div className="spinner mx-auto mt-8"></div>;
+  }
+
+  return (
+    <div data-testid="petition-management">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h2 className="font-heading text-2xl font-bold text-white uppercase">Petition Signatures</h2>
+          <p className="text-[#C8102E] font-heading text-3xl font-black">{count.toLocaleString()}+ supporters</p>
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={() => setShowAddForm(true)} variant="outline" className="border-white/20 text-white hover:bg-white/10">
+            <UserPlus size={18} className="mr-2" /> Add Single
+          </Button>
+        </div>
+      </div>
+
+      {/* Bulk Add Section */}
+      <div className="bg-[#09090B] p-4 rounded-md border border-[#C8102E]/30 mb-6">
+        <h3 className="font-heading text-lg font-bold text-white uppercase mb-3">Boost Social Proof</h3>
+        <p className="text-white/60 text-sm mb-4">Add fake signatures to boost the counter (for demo/social proof purposes)</p>
+        <div className="flex gap-3 items-center">
+          <Input
+            type="number"
+            value={bulkCount}
+            onChange={(e) => setBulkCount(parseInt(e.target.value) || 0)}
+            className="bg-black border-white/20 text-white w-32"
+            min={1}
+            max={10000}
+          />
+          <Button onClick={handleAddBulk} className="btn-primary">
+            Add {bulkCount} Signatures
+          </Button>
+        </div>
+      </div>
+
+      {/* Recent Signatures */}
+      <h3 className="font-heading text-lg font-bold text-white uppercase mb-3">Recent Signatures (showing last 50)</h3>
+      {signatures.length === 0 ? (
+        <p className="text-white/50 text-center py-8">No signatures yet.</p>
+      ) : (
+        <div className="bg-black rounded-md border border-white/10 overflow-hidden max-h-96 overflow-y-auto">
+          <table className="w-full">
+            <thead className="bg-[#09090B] sticky top-0">
+              <tr>
+                <th className="text-left text-white/70 font-medium p-3">Name</th>
+                <th className="text-left text-white/70 font-medium p-3">Location</th>
+                <th className="text-left text-white/70 font-medium p-3">Date</th>
+                <th className="text-right text-white/70 font-medium p-3">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {signatures.slice(0, 50).map((sig) => (
+                <tr key={sig.id} className="border-t border-white/5">
+                  <td className="text-white p-3">{sig.name}</td>
+                  <td className="text-white/60 p-3">{sig.location || '-'}</td>
+                  <td className="text-white/60 p-3">{new Date(sig.signed_at).toLocaleDateString()}</td>
+                  <td className="text-right p-3">
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(sig.id)} className="text-white/60 hover:text-[#C8102E]">
+                      <Trash2 size={16} />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Add Single Signature Modal */}
+      <Dialog open={showAddForm} onOpenChange={setShowAddForm}>
+        <DialogContent className="bg-[#09090B] border-white/10">
+          <DialogHeader>
+            <DialogTitle className="text-white">Add Signature</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAddSingle} className="space-y-4 mt-4">
+            <div>
+              <label className="text-white/70 text-sm mb-1 block">Name *</label>
+              <Input
+                placeholder="John Doe"
+                value={newSig.name}
+                onChange={(e) => setNewSig({ ...newSig, name: e.target.value })}
+                className="bg-black border-white/20 text-white"
+              />
+            </div>
+            <div>
+              <label className="text-white/70 text-sm mb-1 block">Location (optional)</label>
+              <Input
+                placeholder="New York"
+                value={newSig.location}
+                onChange={(e) => setNewSig({ ...newSig, location: e.target.value })}
+                className="bg-black border-white/20 text-white"
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowAddForm(false)} className="border-white/20 text-white hover:bg-white/10">
+                Cancel
+              </Button>
+              <Button type="submit" className="btn-primary">
+                Add Signature
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
@@ -451,6 +750,13 @@ const AdminPage = () => {
     return <AdminLogin onLogin={handleLogin} />;
   }
 
+  const tabs = [
+    { id: 'games', label: 'Games', icon: Gamepad2 },
+    { id: 'comments', label: 'Comments', icon: MessageSquare },
+    { id: 'subscribers', label: 'Subscribers', icon: Mail },
+    { id: 'petition', label: 'Petition', icon: Trophy },
+  ];
+
   return (
     <div className="min-h-screen bg-black" data-testid="admin-dashboard">
       {/* Header */}
@@ -462,7 +768,7 @@ const AdminPage = () => {
               <span className="hidden sm:inline">Back to Site</span>
             </a>
             <div className="w-px h-6 bg-white/10"></div>
-            <h1 className="font-heading text-xl font-bold text-white uppercase">Admin Panel</h1>
+            <h1 className="font-heading text-xl font-bold text-white uppercase">Full Admin Control</h1>
           </div>
           <Button variant="ghost" onClick={handleLogout} className="text-white/60 hover:text-white" data-testid="logout-btn">
             <LogOut size={18} className="mr-2" /> Logout
@@ -473,26 +779,24 @@ const AdminPage = () => {
       {/* Content */}
       <div className="max-w-7xl mx-auto p-6">
         {/* Tabs */}
-        <div className="flex gap-4 mb-8 border-b border-white/10 pb-4">
-          <button
-            onClick={() => setActiveTab('games')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-sm font-medium transition-colors ${activeTab === 'games' ? 'bg-[#C8102E] text-white' : 'text-white/60 hover:text-white'}`}
-            data-testid="tab-games"
-          >
-            <Gamepad2 size={18} /> Games
-          </button>
-          <button
-            onClick={() => setActiveTab('subscribers')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-sm font-medium transition-colors ${activeTab === 'subscribers' ? 'bg-[#C8102E] text-white' : 'text-white/60 hover:text-white'}`}
-            data-testid="tab-subscribers"
-          >
-            <Mail size={18} /> Subscribers
-          </button>
+        <div className="flex flex-wrap gap-2 mb-8 border-b border-white/10 pb-4">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-sm font-medium transition-colors ${activeTab === tab.id ? 'bg-[#C8102E] text-white' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+              data-testid={`tab-${tab.id}`}
+            >
+              <tab.icon size={18} /> {tab.label}
+            </button>
+          ))}
         </div>
 
         {/* Tab Content */}
         {activeTab === 'games' && <GamesManagement />}
-        {activeTab === 'subscribers' && <SubscriptionsList />}
+        {activeTab === 'comments' && <CommentsManagement />}
+        {activeTab === 'subscribers' && <SubscriptionsManagement />}
+        {activeTab === 'petition' && <PetitionManagement />}
       </div>
     </div>
   );
