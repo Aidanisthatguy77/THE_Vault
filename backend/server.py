@@ -453,6 +453,63 @@ async def delete_all_clips_for_game(game_id: str):
     result = await db.clips.delete_many({"game_id": game_id})
     return {"message": f"Deleted {result.deleted_count} clips"}
 
+# ============ SITE CONTENT ROUTES ============
+
+@api_router.get("/content")
+async def get_all_content():
+    """Get all site content"""
+    content = await db.site_content.find({}, {"_id": 0}).to_list(100)
+    return {item["key"]: item["value"] for item in content}
+
+@api_router.get("/content/{key}")
+async def get_content(key: str):
+    """Get specific content by key"""
+    content = await db.site_content.find_one({"key": key}, {"_id": 0})
+    if not content:
+        return {"key": key, "value": ""}
+    return content
+
+@api_router.post("/content")
+async def update_content(content_data: SiteContentUpdate):
+    """Update or create site content"""
+    existing = await db.site_content.find_one({"key": content_data.key})
+    if existing:
+        await db.site_content.update_one(
+            {"key": content_data.key},
+            {"$set": {"value": content_data.value, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+    else:
+        doc = SiteContent(key=content_data.key, value=content_data.value).model_dump()
+        await db.site_content.insert_one(doc)
+    return {"message": "Content updated", "key": content_data.key}
+
+@api_router.post("/content/seed")
+async def seed_default_content():
+    """Seed default site content"""
+    defaults = {
+        "vault_headline": "One Vault. Four Eras. Infinite Play.",
+        "vault_subheadline": "The revolutionary concept that changes everything.",
+        "vault_description": """The NBA 2K Legacy Vault is a revolutionary 'game-within-a-game' mode. Launch full, untouched versions of 2K15, 2K16, 2K17, and 2K20 directly inside modern NBA 2K — powered by secure containers on persistent online servers.
+
+No more sunsets. No player-base split. No cheating.
+
+Friends list works across every era. Park, Pro-Am, Rec, MyTEAM, MyCAREER — all alive forever.
+
+Monetization? Simple subscription or one-time DLC to unlock the Vault. Cosmetic packs per era. High-margin nostalgia revenue that prints money while keeping the community together.""",
+        "vault_features": "Eternal online for every classic|Unified progression & friends|Cheat-proof containers|Recurring revenue stream for 2K|OG retention + new players discovering history",
+        "hero_headline": "The NBA 2K Legacy Vault",
+        "hero_subheadline": "2K15 • 2K16 • 2K17 • 2K20 — All in one place.",
+        "hero_tagline": "Persistent online. No resets. Ever."
+    }
+    
+    for key, value in defaults.items():
+        existing = await db.site_content.find_one({"key": key})
+        if not existing:
+            doc = SiteContent(key=key, value=value).model_dump()
+            await db.site_content.insert_one(doc)
+    
+    return {"message": "Default content seeded"}
+
 # Include the router in the main app
 app.include_router(api_router)
 
