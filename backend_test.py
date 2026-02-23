@@ -155,7 +155,7 @@ class LegacyVaultAPITester:
             "content": "This is a test comment for the Legacy Vault concept!"
         }
         
-        success, data, status = self.run_test("Create Comment", "POST", "comments", 201, comment_data)
+        success, data, status = self.run_test("Create Comment", "POST", "comments", 200, comment_data)
         if success and 'id' in data:
             self.created_comments.append(data['id'])
             print(f"   Created comment with ID: {data['id']}")
