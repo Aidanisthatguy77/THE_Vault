@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { Menu, X, Home, Gamepad2, Lock, Users, Share2, Trophy, ChevronDown, Heart } from "lucide-react";
+import { Menu, X, Home, Gamepad2, Lock, Users, Share2, Trophy, ChevronDown, Heart, FileText, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
