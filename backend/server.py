@@ -199,6 +199,13 @@ async def get_subscriptions():
     subs = await db.subscriptions.find({}, {"_id": 0}).sort("subscribed_at", -1).to_list(1000)
     return subs
 
+@api_router.delete("/subscriptions/{sub_id}")
+async def delete_subscription(sub_id: str):
+    result = await db.subscriptions.delete_one({"id": sub_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+    return {"message": "Subscription deleted"}
+
 # ============ PETITION ROUTES ============
 
 @api_router.post("/petition/sign", response_model=PetitionSign)
@@ -215,8 +222,35 @@ async def get_petition_count():
 
 @api_router.get("/petition/signatures")
 async def get_petition_signatures():
-    signatures = await db.petition.find({}, {"_id": 0}).sort("signed_at", -1).to_list(100)
+    signatures = await db.petition.find({}, {"_id": 0}).sort("signed_at", -1).to_list(1000)
     return signatures
+
+@api_router.delete("/petition/{sig_id}")
+async def delete_petition_signature(sig_id: str):
+    result = await db.petition.delete_one({"id": sig_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Signature not found")
+    return {"message": "Signature deleted"}
+
+@api_router.post("/petition/add-bulk")
+async def add_bulk_signatures(count: int = 100):
+    """Add bulk signatures for social proof"""
+    names = ["Jordan Fan", "2K Legend", "Park Player", "MyCareer OG", "Hooper", "Baller", "Court King", "Dunk Master", "3PT Shooter", "Crossover King"]
+    locations = ["New York", "Los Angeles", "Chicago", "Houston", "Miami", "Atlanta", "Detroit", "Boston", "Dallas", "Phoenix", None]
+    import random
+    
+    signatures = []
+    for i in range(count):
+        sig = {
+            "id": str(uuid.uuid4()),
+            "name": f"{random.choice(names)} #{random.randint(1, 9999)}",
+            "location": random.choice(locations),
+            "signed_at": datetime.now(timezone.utc).isoformat()
+        }
+        signatures.append(sig)
+    
+    await db.petition.insert_many(signatures)
+    return {"message": f"Added {count} signatures", "total": await db.petition.count_documents({})}
 
 # ============ ADMIN AUTH ============
 
