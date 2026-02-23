@@ -83,6 +83,18 @@ class EmailSubscription(BaseModel):
     email: str
     subscribed_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
+# Petition Signature Model
+class PetitionSignCreate(BaseModel):
+    name: str
+    location: Optional[str] = None
+
+class PetitionSign(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    location: Optional[str] = None
+    signed_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
 # Admin Auth Model
 class AdminLogin(BaseModel):
     password: str
@@ -186,6 +198,25 @@ async def subscribe_email(subscription: EmailSubscriptionCreate):
 async def get_subscriptions():
     subs = await db.subscriptions.find({}, {"_id": 0}).sort("subscribed_at", -1).to_list(1000)
     return subs
+
+# ============ PETITION ROUTES ============
+
+@api_router.post("/petition/sign", response_model=PetitionSign)
+async def sign_petition(sign_data: PetitionSignCreate):
+    signature = PetitionSign(name=sign_data.name, location=sign_data.location)
+    doc = signature.model_dump()
+    await db.petition.insert_one(doc)
+    return signature
+
+@api_router.get("/petition/count")
+async def get_petition_count():
+    count = await db.petition.count_documents({})
+    return {"count": count}
+
+@api_router.get("/petition/signatures")
+async def get_petition_signatures():
+    signatures = await db.petition.find({}, {"_id": 0}).sort("signed_at", -1).to_list(100)
+    return signatures
 
 # ============ ADMIN AUTH ============
 
