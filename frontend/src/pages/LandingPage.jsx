@@ -580,6 +580,137 @@ const EmailSignup = () => {
   );
 };
 
+// Petition Counter Component
+const PetitionCounter = () => {
+  const [count, setCount] = useState(0);
+  const [showSign, setShowSign] = useState(false);
+  const [name, setName] = useState('');
+  const [location, setLocation] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [recentSigners, setRecentSigners] = useState([]);
+
+  const fetchCount = async () => {
+    try {
+      const response = await axios.get(`${API}/petition/count`);
+      setCount(response.data.count);
+    } catch (error) {
+      console.error('Error fetching count:', error);
+    }
+  };
+
+  const fetchRecentSigners = async () => {
+    try {
+      const response = await axios.get(`${API}/petition/signatures`);
+      setRecentSigners(response.data.slice(0, 5));
+    } catch (error) {
+      console.error('Error fetching signers:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchCount();
+    fetchRecentSigners();
+  }, []);
+
+  const handleSign = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      toast.error("Please enter your name");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await axios.post(`${API}/petition/sign`, { name, location: location || null });
+      setName('');
+      setLocation('');
+      setShowSign(false);
+      fetchCount();
+      fetchRecentSigners();
+      toast.success("Your signature has been added! Thank you for your support!");
+    } catch (error) {
+      toast.error("Failed to sign petition");
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="bg-black p-6 sm:p-8 rounded-md border border-[#C8102E] text-center" data-testid="petition-counter">
+      <div className="mb-4">
+        <Trophy className="w-12 h-12 text-[#C8102E] mx-auto mb-2" />
+        <h3 className="font-heading text-2xl sm:text-3xl font-black text-white uppercase">Community Support</h3>
+      </div>
+      
+      <div className="mb-6">
+        <div className="font-heading text-5xl sm:text-6xl font-black text-[#C8102E] mb-2" data-testid="petition-count">
+          {count.toLocaleString()}+
+        </div>
+        <p className="text-white/70">fans want the Legacy Vault</p>
+      </div>
+
+      {!showSign ? (
+        <Button 
+          onClick={() => setShowSign(true)}
+          className="btn-primary text-lg px-8 py-4"
+          data-testid="sign-petition-btn"
+        >
+          Add Your Name
+        </Button>
+      ) : (
+        <form onSubmit={handleSign} className="space-y-3 max-w-sm mx-auto">
+          <Input
+            type="text"
+            placeholder="Your name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="bg-black border-white/20 text-white"
+            data-testid="petition-name-input"
+          />
+          <Input
+            type="text"
+            placeholder="City/Country (optional)"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            className="bg-black border-white/20 text-white"
+            data-testid="petition-location-input"
+          />
+          <div className="flex gap-2">
+            <Button 
+              type="button"
+              variant="outline"
+              onClick={() => setShowSign(false)}
+              className="flex-1 border-white/20 text-white hover:bg-white/10"
+            >
+              Cancel
+            </Button>
+            <Button 
+              type="submit"
+              disabled={loading}
+              className="flex-1 btn-primary"
+              data-testid="submit-signature-btn"
+            >
+              {loading ? 'Signing...' : 'Sign Now'}
+            </Button>
+          </div>
+        </form>
+      )}
+
+      {recentSigners.length > 0 && (
+        <div className="mt-6 pt-4 border-t border-white/10">
+          <p className="text-white/50 text-sm mb-2">Recent supporters:</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {recentSigners.map((signer) => (
+              <span key={signer.id} className="text-white/70 text-sm">
+                {signer.name}{signer.location ? ` (${signer.location})` : ''} •
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Community Section
 const CommunitySection = () => {
   return (
