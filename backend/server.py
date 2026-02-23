@@ -173,6 +173,34 @@ class Proof(BaseModel):
     order: int = 0
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
+# Vault Mockup Model
+class MockupCreate(BaseModel):
+    title: str
+    description: str
+    media_type: str = "image"  # "image" or "video"
+    image_url: Optional[str] = None
+    video_embed_url: Optional[str] = None
+    order: int = 0
+
+class MockupUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    media_type: Optional[str] = None
+    image_url: Optional[str] = None
+    video_embed_url: Optional[str] = None
+    order: Optional[int] = None
+
+class Mockup(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    description: str
+    media_type: str = "image"
+    image_url: Optional[str] = None
+    video_embed_url: Optional[str] = None
+    order: int = 0
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
 # ============ GAME ROUTES ============
 
 @api_router.get("/games", response_model=List[Game])
