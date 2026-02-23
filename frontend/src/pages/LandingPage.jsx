@@ -182,6 +182,25 @@ const GameCard = ({ game, onClick }) => {
 // Games Section
 const GamesSection = ({ games }) => {
   const [selectedGame, setSelectedGame] = useState(null);
+  const [clips, setClips] = useState([]);
+  const [loadingClips, setLoadingClips] = useState(false);
+
+  const fetchClips = async (gameId) => {
+    setLoadingClips(true);
+    try {
+      const response = await axios.get(`${API}/clips/game/${gameId}`);
+      setClips(response.data);
+    } catch (error) {
+      console.error('Error fetching clips:', error);
+      setClips([]);
+    }
+    setLoadingClips(false);
+  };
+
+  const handleOpenGame = (game) => {
+    setSelectedGame(game);
+    fetchClips(game.id);
+  };
 
   return (
     <section id="games" className="py-20 court-pattern" data-testid="games-section">
@@ -196,7 +215,7 @@ const GamesSection = ({ games }) => {
         {/* Games Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {games.map((game) => (
-            <GameCard key={game.id} game={game} onClick={() => setSelectedGame(game)} />
+            <GameCard key={game.id} game={game} onClick={() => handleOpenGame(game)} />
           ))}
         </div>
       </div>
@@ -229,9 +248,10 @@ const GamesSection = ({ games }) => {
                 </div>
               </div>
 
+              {/* Main YouTube Embed */}
               {selectedGame.youtube_embed && (
                 <div className="mt-6">
-                  <h4 className="text-[#C8102E] font-heading text-lg font-bold uppercase mb-4">Gameplay Highlights</h4>
+                  <h4 className="text-[#C8102E] font-heading text-lg font-bold uppercase mb-4">Featured Gameplay</h4>
                   <div className="aspect-video">
                     <iframe
                       src={selectedGame.youtube_embed}
@@ -240,6 +260,48 @@ const GamesSection = ({ games }) => {
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                       allowFullScreen
                     ></iframe>
+                  </div>
+                </div>
+              )}
+
+              {/* Additional Clips */}
+              {loadingClips ? (
+                <div className="mt-6 text-center">
+                  <div className="spinner mx-auto"></div>
+                </div>
+              ) : clips.length > 0 && (
+                <div className="mt-6">
+                  <h4 className="text-[#C8102E] font-heading text-lg font-bold uppercase mb-4">
+                    More Clips & Content ({clips.length})
+                  </h4>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    {clips.map((clip) => (
+                      <div key={clip.id} className="bg-black p-3 rounded-md border border-white/10">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={`text-xs uppercase px-2 py-0.5 rounded ${
+                            clip.platform === 'youtube' ? 'bg-red-500/20 text-red-400' :
+                            clip.platform === 'tiktok' ? 'bg-pink-500/20 text-pink-400' :
+                            clip.platform === 'instagram' ? 'bg-purple-500/20 text-purple-400' :
+                            'bg-white/10 text-white/60'
+                          }`}>
+                            {clip.platform}
+                          </span>
+                        </div>
+                        <h5 className="text-white font-medium text-sm mb-2">{clip.title}</h5>
+                        {clip.description && (
+                          <p className="text-white/60 text-xs mb-2">{clip.description}</p>
+                        )}
+                        <div className="aspect-video">
+                          <iframe
+                            src={clip.embed_url}
+                            title={clip.title}
+                            className="w-full h-full rounded"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                          ></iframe>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
