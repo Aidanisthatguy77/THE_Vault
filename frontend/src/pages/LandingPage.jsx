@@ -123,15 +123,22 @@ const HeroSection = ({ content }) => {
 
         {/* Headline */}
         <h1 className="font-heading text-4xl sm:text-5xl lg:text-7xl font-black text-white uppercase tracking-tight mb-4 animate-fade-in-up animation-delay-100" data-testid="hero-headline">
-          <span className="underline-red">The NBA 2K Legacy Vault</span>
+          <span className="underline-red">{headline}</span>
         </h1>
 
         {/* Subheadline */}
         <p className="text-lg sm:text-xl lg:text-2xl text-white/90 mb-2 animate-fade-in-up animation-delay-200 font-heading" data-testid="hero-subheadline">
-          <span className="text-[#C8102E]">2K15</span> • <span className="text-[#C8102E]">2K16</span> • <span className="text-[#C8102E]">2K17</span> • <span className="text-[#C8102E]">2K20</span> — All in one place.
+          {subheadline.split('•').map((part, i) => (
+            <span key={i}>
+              {i > 0 && ' • '}
+              <span className={part.includes('2K') ? 'text-[#C8102E]' : ''}>{part.trim()}</span>
+            </span>
+          ))}
         </p>
         <p className="text-base sm:text-lg text-white/80 mb-8 animate-fade-in-up animation-delay-200">
-          Persistent online. No resets. <span className="text-[#C8102E] font-bold">Ever.</span>
+          {tagline.includes('Ever.') ? (
+            <>{tagline.replace('Ever.', '')}<span className="text-[#C8102E] font-bold">Ever.</span></>
+          ) : tagline}
         </p>
 
         {/* CTA Buttons */}
