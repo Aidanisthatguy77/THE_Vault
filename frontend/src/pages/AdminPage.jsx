@@ -1174,6 +1174,8 @@ const ProofManagement = () => {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editProof, setEditProof] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
   const [formData, setFormData] = useState({
     image_url: '',
     title: '',
@@ -1196,10 +1198,97 @@ const ProofManagement = () => {
     fetchProofs();
   }, []);
 
+  // Handle file upload
+  const handleFileUpload = async (file) => {
+    if (!file) return;
+    
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Only JPEG, PNG, GIF, and WebP images are allowed");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formDataUpload = new FormData();
+      formDataUpload.append('file', file);
+      
+      const response = await axios.post(`${API}/upload`, formDataUpload, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      // Construct full URL
+      const imageUrl = `${BACKEND_URL}${response.data.url}`;
+      setFormData(prev => ({ ...prev, image_url: imageUrl }));
+      toast.success("Image uploaded!");
+    } catch (error) {
+      toast.error("Failed to upload image");
+      console.error('Upload error:', error);
+    }
+    setUploading(false);
+  };
+
+  // Handle clipboard paste
+  const handlePaste = async (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        e.preventDefault();
+        const file = items[i].getAsFile();
+        if (file) {
+          setUploading(true);
+          try {
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+              const base64Data = event.target.result;
+              const response = await axios.post(`${API}/upload/base64`, {
+                data: base64Data,
+                filename: 'pasted_image.png'
+              });
+              const imageUrl = `${BACKEND_URL}${response.data.url}`;
+              setFormData(prev => ({ ...prev, image_url: imageUrl }));
+              toast.success("Screenshot pasted!");
+              setUploading(false);
+            };
+            reader.readAsDataURL(file);
+          } catch (error) {
+            toast.error("Failed to paste image");
+            setUploading(false);
+          }
+        }
+        break;
+      }
+    }
+  };
+
+  // Handle drag and drop
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) {
+      handleFileUpload(files[0]);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.image_url || !formData.title) {
-      toast.error("Image URL and title are required");
+      toast.error("Image and title are required");
       return;
     }
 
@@ -1258,22 +1347,11 @@ const ProofManagement = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
           <h2 className="font-heading text-2xl font-bold text-white uppercase">Proof of Demand ({proofs.length})</h2>
-          <p className="text-white/60 text-sm">Add screenshots showing community demand - tweets, Reddit posts, YouTube comments, etc.</p>
+          <p className="text-white/60 text-sm">Upload screenshots showing community demand - tweets, Reddit posts, YouTube comments, etc.</p>
         </div>
-        <Button onClick={openAddForm} className="btn-primary">
+        <Button onClick={openAddForm} className="btn-primary" data-testid="add-proof-btn">
           <Plus size={18} className="mr-2" /> Add Proof
         </Button>
-      </div>
-
-      {/* How to add proof */}
-      <div className="bg-[#09090B] p-4 rounded-md border border-white/10 mb-6">
-        <h3 className="font-heading text-lg font-bold text-white uppercase mb-2">How to Add Proof Screenshots</h3>
-        <div className="text-white/70 text-sm space-y-1">
-          <p>1. Take a screenshot of a tweet, Reddit post, YouTube comment, etc.</p>
-          <p>2. Upload it to <a href="https://imgur.com" target="_blank" rel="noopener noreferrer" className="text-[#C8102E] hover:underline">imgur.com</a> or any image host</p>
-          <p>3. Copy the direct image URL (ends in .jpg, .png, etc.)</p>
-          <p>4. Paste it here with a title and description</p>
-        </div>
       </div>
 
       {/* Proofs Grid */}
@@ -1282,7 +1360,7 @@ const ProofManagement = () => {
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {proofs.map((proof) => (
-            <div key={proof.id} className="bg-black rounded-md border border-white/10 overflow-hidden">
+            <div key={proof.id} className="bg-black rounded-md border border-white/10 overflow-hidden" data-testid={`proof-item-${proof.id}`}>
               <img 
                 src={proof.image_url} 
                 alt={proof.title}
@@ -1314,25 +1392,61 @@ const ProofManagement = () => {
 
       {/* Add/Edit Proof Modal */}
       <Dialog open={showForm} onOpenChange={() => { setShowForm(false); setEditProof(null); }}>
-        <DialogContent className="bg-[#09090B] border-white/10 max-w-lg">
+        <DialogContent className="bg-[#09090B] border-white/10 max-w-lg" data-testid="proof-form-modal">
           <DialogHeader>
             <DialogTitle className="font-heading text-2xl font-bold text-white uppercase">
               {editProof ? 'Edit Proof' : 'Add Proof of Demand'}
             </DialogTitle>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+          <form onSubmit={handleSubmit} className="space-y-4 mt-4" onPaste={handlePaste}>
+            {/* Image Upload Area */}
             <div>
-              <label className="text-white/70 text-sm mb-1 block">Image URL *</label>
-              <Input
-                placeholder="https://i.imgur.com/example.png"
-                value={formData.image_url}
-                onChange={(e) => setFormData({...formData, image_url: e.target.value})}
-                className="bg-black border-white/20 text-white"
-              />
-              {formData.image_url && (
-                <img src={formData.image_url} alt="Preview" className="mt-2 w-full h-32 object-cover rounded" />
-              )}
+              <label className="text-white/70 text-sm mb-2 block">Upload Image *</label>
+              <div
+                onDragEnter={handleDrag}
+                onDragLeave={handleDrag}
+                onDragOver={handleDrag}
+                onDrop={handleDrop}
+                className={`relative border-2 border-dashed rounded-md p-6 text-center transition-colors ${
+                  dragActive ? 'border-[#C8102E] bg-[#C8102E]/10' : 'border-white/20 hover:border-white/40'
+                }`}
+              >
+                {uploading ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="spinner"></div>
+                    <p className="text-white/60 text-sm">Uploading...</p>
+                  </div>
+                ) : formData.image_url ? (
+                  <div className="relative">
+                    <img src={formData.image_url} alt="Preview" className="max-h-48 mx-auto rounded" />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setFormData(prev => ({ ...prev, image_url: '' }))}
+                      className="absolute top-2 right-2 bg-black/50 hover:bg-black text-white"
+                    >
+                      <X size={16} />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-3">
+                    <Image size={40} className="text-white/40" />
+                    <div>
+                      <p className="text-white/80 font-medium">Drag & drop an image here</p>
+                      <p className="text-white/50 text-sm">or click to browse, or <span className="text-[#C8102E]">paste a screenshot (Ctrl+V)</span></p>
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      onChange={(e) => handleFileUpload(e.target.files?.[0])}
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                      data-testid="file-input"
+                    />
+                  </div>
+                )}
+              </div>
             </div>
 
             <div>
@@ -1342,6 +1456,7 @@ const ProofManagement = () => {
                 value={formData.title}
                 onChange={(e) => setFormData({...formData, title: e.target.value})}
                 className="bg-black border-white/20 text-white"
+                data-testid="proof-title-input"
               />
             </div>
 
@@ -1352,6 +1467,7 @@ const ProofManagement = () => {
                 value={formData.description}
                 onChange={(e) => setFormData({...formData, description: e.target.value})}
                 className="bg-black border-white/20 text-white min-h-[80px]"
+                data-testid="proof-description-input"
               />
             </div>
 
@@ -1362,6 +1478,7 @@ const ProofManagement = () => {
                 value={formData.source}
                 onChange={(e) => setFormData({...formData, source: e.target.value})}
                 className="bg-black border-white/20 text-white"
+                data-testid="proof-source-input"
               />
             </div>
 
@@ -1372,6 +1489,7 @@ const ProofManagement = () => {
                 value={formData.order}
                 onChange={(e) => setFormData({...formData, order: parseInt(e.target.value) || 0})}
                 className="bg-black border-white/20 text-white w-24"
+                data-testid="proof-order-input"
               />
             </div>
 
@@ -1379,7 +1497,7 @@ const ProofManagement = () => {
               <Button type="button" variant="outline" onClick={() => setShowForm(false)} className="border-white/20 text-white hover:bg-white/10">
                 Cancel
               </Button>
-              <Button type="submit" className="btn-primary">
+              <Button type="submit" className="btn-primary" disabled={uploading} data-testid="submit-proof-btn">
                 {editProof ? 'Update Proof' : 'Add Proof'}
               </Button>
             </DialogFooter>
