@@ -1,0 +1,150 @@
+{
+  "project_name": "NBA 2K Legacy Vault",
+  "identity": {
+    "persona": "E1",
+    "tone": "Premium, Tactical, High-Energy, Nostalgic",
+    "core_philosophy": "Revive the Classics. Play Online Forever."
+  },
+  "design_system": {
+    "colors": {
+      "palette_name": "The Blacktop Protocol",
+      "primary": "#000000",
+      "secondary": "#C8102E",
+      "text": {
+        "primary": "#FFFFFF",
+        "secondary": "#A1A1AA",
+        "muted": "#52525B"
+      },
+      "accent": "#C8102E",
+      "background": "#000000",
+      "surface": "#09090B",
+      "border": "#27272A",
+      "rules": [
+        "NO Gradients unless it's pure black-to-transparent",
+        "NO Blue, Green, or Teal colors",
+        "Use Red (#C8102E) sparingly for CTAs and key highlights only"
+      ]
+    },
+    "typography": {
+      "headings": {
+        "family": "Barlow Condensed, sans-serif",
+        "weights": ["700", "900"],
+        "usage": "Use for all section titles, hero text, and game titles. Uppercase preferred."
+      },
+      "body": {
+        "family": "Manrope, sans-serif",
+        "weights": ["400", "500"],
+        "usage": "Use for descriptions, comments, and UI elements."
+      },
+      "font_installation": "Import from Google Fonts: https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;900&family=Manrope:wght@400;500;700&display=swap"
+    },
+    "spacing": {
+      "base_scale": 4,
+      "container_padding": "p-6 md:p-12 lg:p-24",
+      "section_gap": "gap-12 md:gap-24"
+    },
+    "border_radius": {
+      "default": "rounded-none",
+      "buttons": "rounded-sm",
+      "cards": "rounded-md"
+    },
+    "effects": {
+      "glassmorphism": "bg-black/80 backdrop-blur-md border border-white/10",
+      "neon_glow": "shadow-[0_0_20px_rgba(200,16,46,0.3)]",
+      "texture": "Use a subtle noise overlay or court-line pattern on black backgrounds."
+    }
+  },
+  "layout_strategy": {
+    "grid_system": "Bento Grid",
+    "mobile_first": true,
+    "max_width": "max-w-7xl mx-auto",
+    "sections": {
+      "hero": {
+        "type": "Immersive",
+        "layout": "Center focus with vault door visual",
+        "elements": ["Headline", "Vault Door Image", "Social Share Buttons"]
+      },
+      "games_grid": {
+        "type": "Bento / Masonry",
+        "desktop": "grid-cols-4",
+        "mobile": "flex flex-col gap-8"
+      },
+      "vault_showcase": {
+        "type": "Feature Split",
+        "layout": "Text Left, Image Right (Mockups)"
+      },
+      "community": {
+        "type": "Feed",
+        "layout": "Single column centered"
+      }
+    }
+  },
+  "components": {
+    "marketing": {
+      "hero_button": "bg-[#C8102E] text-white hover:bg-red-700 uppercase font-bold tracking-widest px-8 py-4 rounded-sm transition-all duration-300 hover:shadow-[0_0_20px_rgba(200,16,46,0.5)]",
+      "game_card": "group relative overflow-hidden bg-[#09090B] border border-white/10 hover:border-[#C8102E] transition-colors duration-300",
+      "nav_bar": "fixed top-0 w-full z-50 bg-black/90 backdrop-blur-md border-b border-white/10"
+    },
+    "admin": {
+      "table": "Shadcn Table component, customized with black bg and red accents",
+      "form": "Shadcn Form, Input, Label - styled with dark mode defaults",
+      "dialog": "Shadcn Dialog for Game Edit/Create"
+    },
+    "interactive": {
+      "scroll_animation": "Use 'framer-motion' for fade-in up effects on scroll",
+      "vault_door": "Animate the vault door opening on load or scroll if possible (using CSS transforms)"
+    }
+  },
+  "assets": {
+    "images": {
+      "hero_vault": {
+        "url": "https://images.pexels.com/photos/19882101/pexels-photo-19882101.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "alt": "Steel Vault Doors",
+        "usage": "Hero section, central visual. Apply 'mix-blend-luminosity' or 'grayscale' if it has color, to ensure strict black/white theme."
+      },
+      "background_texture": {
+        "url": "https://images.unsplash.com/photo-1607332749331-6db303fcbb5d",
+        "alt": "Court Lines",
+        "usage": "Background overlay with opacity-10 to create subtle texture."
+      },
+      "community_highlight": {
+        "url": "https://images.unsplash.com/photo-1554017754-03c5b9bd12e7",
+        "alt": "Gamer Action",
+        "usage": "Community section background or side image."
+      },
+      "game_covers": [
+        "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1546519638-68e109498ee2?auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1533923156502-be31530547c4?auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1504450758481-7338eba7524a?auto=format&fit=crop&q=80"
+      ]
+    },
+    "icons": {
+      "library": "lucide-react",
+      "specifics": ["Trophy", "Gamepad2", "Users", "Lock", "Menu", "X", "Share2"]
+    }
+  },
+  "implementation_steps": {
+    "step_1": "Setup Global CSS variables for the strict palette in index.css.",
+    "step_2": "Install fonts (Barlow Condensed, Manrope).",
+    "step_3": "Build the 'Sticky Header' with Mobile Menu (Hamburger).",
+    "step_4": "Develop the Hero Section with the Vault Door image and 'glitch' text effect.",
+    "step_5": "Create the Games Grid using a Bento layout. Use dummy data initially.",
+    "step_6": "Implement the 'Community' section with MongoDB integration for comments.",
+    "step_7": "Build the Admin Panel (separate route /admin) with Authentication (can be mocked or simple basic auth).",
+    "step_8": "Add PWA manifest and service worker registration.",
+    "step_9": "Final Polish: Add 'framer-motion' scroll reveals and hover effects."
+  },
+  "universal_guidelines": {
+    "do_not": [
+      "Use purple, blue, or green.",
+      "Use rounded buttons (keep them sharp/pill or slightly rounded-sm).",
+      "Use generic 'Lorem Ipsum' - write copy related to Basketball/Legacy."
+    ],
+    "must_do": [
+      "Ensure text contrast is high (White on Black).",
+      "Use uppercase for all headings.",
+      "Add 'data-testid' to all interactive elements."
+    ]
+  }
+}
