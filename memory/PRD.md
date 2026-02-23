@@ -48,6 +48,13 @@ Build a premium, fast-loading, fully mobile-responsive single-page PWA website f
 - `PUT /api/proof/:id` - Update proof
 - `DELETE /api/proof/:id` - Delete proof
 
+**Vault Mockups (NEW)**
+- `GET /api/mockups` - Get all mockups
+- `POST /api/mockups` - Create mockup (image or video)
+- `PUT /api/mockups/:id` - Update mockup
+- `DELETE /api/mockups/:id` - Delete mockup
+- `POST /api/mockups/seed` - Seed default mockups
+
 **File Upload**
 - `POST /api/upload` - Upload image file (multipart/form-data)
 - `POST /api/upload/base64` - Upload clipboard paste (base64)
