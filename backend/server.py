@@ -207,11 +207,25 @@ async def create_comment(comment_data: CommentCreate):
     comment = Comment(
         author_name=comment_data.author_name,
         content=comment_data.content,
-        parent_id=comment_data.parent_id
+        parent_id=comment_data.parent_id,
+        is_admin=comment_data.is_admin,
+        likes=0
     )
     doc = comment.model_dump()
     await db.comments.insert_one(doc)
     return comment
+
+@api_router.post("/comments/{comment_id}/like")
+async def like_comment(comment_id: str):
+    """Like a comment"""
+    result = await db.comments.update_one(
+        {"id": comment_id},
+        {"$inc": {"likes": 1}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    updated = await db.comments.find_one({"id": comment_id}, {"_id": 0})
+    return {"likes": updated.get("likes", 0)}
 
 @api_router.delete("/comments/{comment_id}")
 async def delete_comment(comment_id: str):
