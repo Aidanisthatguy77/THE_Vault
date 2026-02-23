@@ -379,6 +379,51 @@ async def seed_games():
 async def root():
     return {"message": "NBA 2K Legacy Vault API"}
 
+# ============ CLIPS/MEDIA ROUTES ============
+
+@api_router.get("/clips")
+async def get_all_clips():
+    """Get all clips"""
+    clips = await db.clips.find({}, {"_id": 0}).sort("order", 1).to_list(1000)
+    return clips
+
+@api_router.get("/clips/game/{game_id}")
+async def get_clips_by_game(game_id: str):
+    """Get clips for a specific game"""
+    clips = await db.clips.find({"game_id": game_id}, {"_id": 0}).sort("order", 1).to_list(100)
+    return clips
+
+@api_router.post("/clips", response_model=Clip)
+async def create_clip(clip_data: ClipCreate):
+    clip = Clip(**clip_data.model_dump())
+    doc = clip.model_dump()
+    await db.clips.insert_one(doc)
+    return clip
+
+@api_router.put("/clips/{clip_id}", response_model=Clip)
+async def update_clip(clip_id: str, clip_data: ClipUpdate):
+    existing = await db.clips.find_one({"id": clip_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Clip not found")
+    
+    update_data = {k: v for k, v in clip_data.model_dump().items() if v is not None}
+    await db.clips.update_one({"id": clip_id}, {"$set": update_data})
+    updated = await db.clips.find_one({"id": clip_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/clips/{clip_id}")
+async def delete_clip(clip_id: str):
+    result = await db.clips.delete_one({"id": clip_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Clip not found")
+    return {"message": "Clip deleted"}
+
+@api_router.delete("/clips/game/{game_id}")
+async def delete_all_clips_for_game(game_id: str):
+    """Delete all clips for a game"""
+    result = await db.clips.delete_many({"game_id": game_id})
+    return {"message": f"Deleted {result.deleted_count} clips"}
+
 # Include the router in the main app
 app.include_router(api_router)
 
