@@ -129,6 +129,7 @@ Build a premium, fast-loading, fully mobile-responsive single-page PWA website f
 - [x] **Proof of Demand with direct file upload and clipboard paste**
 - [x] **Google Doc link integration**
 - [x] **Vault Mockups management with image upload AND video embed support**
+- [x] **Twitter/X share button on Proof of Demand screenshots**
 
 ### P1 (High Priority)
 - [ ] Email notification system (SendGrid/Resend integration)
