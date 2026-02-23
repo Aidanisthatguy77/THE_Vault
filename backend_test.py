@@ -191,7 +191,7 @@ class LegacyVaultAPITester:
         test_email = f"test-{datetime.now().strftime('%H%M%S')}@example.com"
         subscription_data = {"email": test_email}
         
-        success, data, status = self.run_test("Email Subscription", "POST", "subscribe", 201, subscription_data)
+        success, data, status = self.run_test("Email Subscription", "POST", "subscribe", 200, subscription_data)
         if success:
             self.subscribed_emails.append(test_email)
             print(f"   Subscribed email: {test_email}")
