@@ -663,6 +663,8 @@ const ClipsManagement = () => {
 const CommentsManagement = () => {
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [replyTo, setReplyTo] = useState(null);
+  const [replyContent, setReplyContent] = useState('');
 
   const fetchComments = async () => {
     try {
@@ -689,6 +691,27 @@ const CommentsManagement = () => {
     }
   };
 
+  const handleAdminReply = async (parentId) => {
+    if (!replyContent.trim()) {
+      toast.error("Please enter a reply");
+      return;
+    }
+    try {
+      await axios.post(`${API}/comments`, {
+        author_name: "Legacy Vault Team",
+        content: replyContent,
+        parent_id: parentId,
+        is_admin: true
+      });
+      toast.success("Admin reply posted!");
+      setReplyTo(null);
+      setReplyContent('');
+      fetchComments();
+    } catch (error) {
+      toast.error("Failed to post reply");
+    }
+  };
+
   if (loading) {
     return <div className="spinner mx-auto mt-8"></div>;
   }
@@ -698,7 +721,10 @@ const CommentsManagement = () => {
   return (
     <div data-testid="comments-management">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="font-heading text-2xl font-bold text-white uppercase">Manage Comments ({totalComments})</h2>
+        <div>
+          <h2 className="font-heading text-2xl font-bold text-white uppercase">Manage Comments ({totalComments})</h2>
+          <p className="text-white/60 text-sm">Reply to comments as Admin with the reply button</p>
+        </div>
         <Button onClick={fetchComments} variant="outline" className="border-white/20 text-white hover:bg-white/10">
           <RefreshCw size={18} className="mr-2" /> Refresh
         </Button>
@@ -714,15 +740,50 @@ const CommentsManagement = () => {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-bold text-white">{comment.author_name}</span>
+                    {comment.is_admin && (
+                      <span className="bg-[#C8102E] text-white text-xs px-2 py-0.5 rounded font-bold">ADMIN</span>
+                    )}
                     <span className="text-white/40 text-sm">{new Date(comment.created_at).toLocaleString()}</span>
+                    {comment.likes > 0 && (
+                      <span className="flex items-center gap-1 text-[#C8102E] text-sm">
+                        <Heart size={14} className="fill-[#C8102E]" /> {comment.likes}
+                      </span>
+                    )}
                   </div>
                   <p className="text-white/80">{comment.content}</p>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => handleDelete(comment.id)} className="text-white/60 hover:text-[#C8102E]">
-                  <Trash2 size={18} />
-                </Button>
+                <div className="flex gap-1">
+                  <Button variant="ghost" size="icon" onClick={() => setReplyTo(replyTo === comment.id ? null : comment.id)} className="text-white/60 hover:text-[#C8102E]" title="Reply as Admin">
+                    <Reply size={18} />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleDelete(comment.id)} className="text-white/60 hover:text-[#C8102E]">
+                    <Trash2 size={18} />
+                  </Button>
+                </div>
               </div>
 
+              {/* Admin Reply Form */}
+              {replyTo === comment.id && (
+                <div className="mt-3 p-3 bg-[#09090B] rounded border border-[#C8102E]/30">
+                  <p className="text-[#C8102E] text-sm font-bold mb-2">Reply as Admin:</p>
+                  <Textarea
+                    placeholder="Write your admin response..."
+                    value={replyContent}
+                    onChange={(e) => setReplyContent(e.target.value)}
+                    className="bg-black border-white/20 text-white mb-2 min-h-[80px]"
+                  />
+                  <div className="flex gap-2">
+                    <Button onClick={() => setReplyTo(null)} variant="outline" className="border-white/20 text-white hover:bg-white/10">
+                      Cancel
+                    </Button>
+                    <Button onClick={() => handleAdminReply(comment.id)} className="btn-primary">
+                      Post Admin Reply
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Replies */}
               {comment.replies && comment.replies.length > 0 && (
                 <div className="mt-3 ml-6 space-y-2 border-l-2 border-[#C8102E]/30 pl-4">
                   {comment.replies.map((reply) => (
@@ -730,7 +791,15 @@ const CommentsManagement = () => {
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-white text-sm">{reply.author_name}</span>
+                          {reply.is_admin && (
+                            <span className="bg-[#C8102E] text-white text-xs px-1.5 py-0.5 rounded font-bold text-[10px]">ADMIN</span>
+                          )}
                           <span className="text-white/40 text-xs">{new Date(reply.created_at).toLocaleString()}</span>
+                          {reply.likes > 0 && (
+                            <span className="flex items-center gap-1 text-[#C8102E] text-xs">
+                              <Heart size={12} className="fill-[#C8102E]" /> {reply.likes}
+                            </span>
+                          )}
                         </div>
                         <p className="text-white/70 text-sm">{reply.content}</p>
                       </div>
