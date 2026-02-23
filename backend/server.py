@@ -99,6 +99,33 @@ class PetitionSign(BaseModel):
 class AdminLogin(BaseModel):
     password: str
 
+# Clip/Media Model
+class ClipCreate(BaseModel):
+    game_id: str
+    title: str
+    platform: str  # youtube, tiktok, instagram, twitter
+    embed_url: str
+    description: Optional[str] = None
+    order: int = 0
+
+class ClipUpdate(BaseModel):
+    title: Optional[str] = None
+    platform: Optional[str] = None
+    embed_url: Optional[str] = None
+    description: Optional[str] = None
+    order: Optional[int] = None
+
+class Clip(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    game_id: str
+    title: str
+    platform: str
+    embed_url: str
+    description: Optional[str] = None
+    order: int = 0
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
 # ============ GAME ROUTES ============
 
 @api_router.get("/games", response_model=List[Game])
