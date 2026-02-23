@@ -1076,6 +1076,96 @@ const PetitionManagement = () => {
   );
 };
 
+// Site Content Management
+const ContentManagement = () => {
+  const [content, setContent] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const contentFields = [
+    { key: 'hero_headline', label: 'Hero Headline', type: 'text', placeholder: 'The NBA 2K Legacy Vault' },
+    { key: 'hero_subheadline', label: 'Hero Subheadline', type: 'text', placeholder: '2K15 • 2K16 • 2K17 • 2K20 — All in one place.' },
+    { key: 'hero_tagline', label: 'Hero Tagline', type: 'text', placeholder: 'Persistent online. No resets. Ever.' },
+    { key: 'vault_headline', label: 'Vault Section Headline', type: 'text', placeholder: 'One Vault. Four Eras. Infinite Play.' },
+    { key: 'vault_subheadline', label: 'Vault Section Subheadline', type: 'text', placeholder: 'The revolutionary concept...' },
+    { key: 'vault_description', label: 'Vault Concept Description', type: 'textarea', placeholder: 'The NBA 2K Legacy Vault is...' },
+    { key: 'vault_features', label: 'Vault Features (separate with |)', type: 'textarea', placeholder: 'Feature 1|Feature 2|Feature 3' },
+  ];
+
+  const fetchContent = async () => {
+    try {
+      const response = await axios.get(`${API}/content`);
+      setContent(response.data);
+    } catch (error) {
+      console.error('Error:', error);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    // Seed defaults first
+    axios.post(`${API}/content/seed`).catch(() => {});
+    fetchContent();
+  }, []);
+
+  const handleSave = async (key, value) => {
+    setSaving(true);
+    try {
+      await axios.post(`${API}/content`, { key, value });
+      toast.success(`${key.replace(/_/g, ' ')} updated!`);
+      setContent(prev => ({ ...prev, [key]: value }));
+    } catch (error) {
+      toast.error("Failed to save");
+    }
+    setSaving(false);
+  };
+
+  if (loading) {
+    return <div className="spinner mx-auto mt-8"></div>;
+  }
+
+  return (
+    <div data-testid="content-management">
+      <div className="mb-6">
+        <h2 className="font-heading text-2xl font-bold text-white uppercase">Edit Site Content</h2>
+        <p className="text-white/60 text-sm">Customize all the text on your site</p>
+      </div>
+
+      <div className="space-y-6">
+        {contentFields.map((field) => (
+          <div key={field.key} className="bg-black p-4 rounded-md border border-white/10">
+            <label className="text-[#C8102E] font-heading font-bold uppercase text-sm mb-2 block">
+              {field.label}
+            </label>
+            {field.type === 'textarea' ? (
+              <Textarea
+                value={content[field.key] || ''}
+                onChange={(e) => setContent(prev => ({ ...prev, [field.key]: e.target.value }))}
+                placeholder={field.placeholder}
+                className="bg-[#09090B] border-white/20 text-white min-h-[120px] mb-3"
+              />
+            ) : (
+              <Input
+                value={content[field.key] || ''}
+                onChange={(e) => setContent(prev => ({ ...prev, [field.key]: e.target.value }))}
+                placeholder={field.placeholder}
+                className="bg-[#09090B] border-white/20 text-white mb-3"
+              />
+            )}
+            <Button 
+              onClick={() => handleSave(field.key, content[field.key])} 
+              disabled={saving}
+              className="btn-primary text-sm"
+            >
+              Save {field.label}
+            </Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 // Main Admin Page
 const AdminPage = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
