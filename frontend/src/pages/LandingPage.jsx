@@ -1021,17 +1021,20 @@ const MobileBottomNav = () => {
 const LandingPage = () => {
   const [games, setGames] = useState([]);
   const [content, setContent] = useState({});
+  const [proofs, setProofs] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [gamesRes, contentRes] = await Promise.all([
+        const [gamesRes, contentRes, proofsRes] = await Promise.all([
           axios.get(`${API}/games`),
-          axios.get(`${API}/content`)
+          axios.get(`${API}/content`),
+          axios.get(`${API}/proof`)
         ]);
         setGames(gamesRes.data);
         setContent(contentRes.data);
+        setProofs(proofsRes.data);
       } catch (error) {
         console.error('Error fetching data:', error);
       }
@@ -1056,7 +1059,7 @@ const LandingPage = () => {
       <Header />
       <HeroSection content={content} />
       <GamesSection games={games} />
-      <VaultSection content={content} games={games} />
+      <VaultSection content={content} games={games} proofs={proofs} />
       <CommunitySection />
       <Footer />
       <MobileBottomNav />
