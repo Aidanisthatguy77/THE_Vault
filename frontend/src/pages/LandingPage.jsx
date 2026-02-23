@@ -1040,27 +1040,31 @@ const LandingPage = () => {
   const [games, setGames] = useState([]);
   const [content, setContent] = useState({});
   const [proofs, setProofs] = useState([]);
+  const [mockups, setMockups] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [gamesRes, contentRes, proofsRes] = await Promise.all([
+        const [gamesRes, contentRes, proofsRes, mockupsRes] = await Promise.all([
           axios.get(`${API}/games`),
           axios.get(`${API}/content`),
-          axios.get(`${API}/proof`)
+          axios.get(`${API}/proof`),
+          axios.get(`${API}/mockups`)
         ]);
         setGames(gamesRes.data);
         setContent(contentRes.data);
         setProofs(proofsRes.data);
+        setMockups(mockupsRes.data);
       } catch (error) {
         console.error('Error fetching data:', error);
       }
       setLoading(false);
     };
     
-    // Seed content on first load
+    // Seed content and mockups on first load
     axios.post(`${API}/content/seed`).catch(() => {});
+    axios.post(`${API}/mockups/seed`).catch(() => {});
     fetchData();
   }, []);
 
@@ -1077,7 +1081,7 @@ const LandingPage = () => {
       <Header />
       <HeroSection content={content} />
       <GamesSection games={games} />
-      <VaultSection content={content} games={games} proofs={proofs} />
+      <VaultSection content={content} games={games} proofs={proofs} mockups={mockups} />
       <CommunitySection />
       <Footer />
       <MobileBottomNav />
