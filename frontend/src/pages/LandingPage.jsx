@@ -331,31 +331,58 @@ const GamesSection = ({ games }) => {
 };
 
 // Vault Section
-const VaultSection = () => {
+const VaultSection = ({ content, games }) => {
+  const headline = content.vault_headline || DEFAULT_CONTENT.vault_headline;
+  const subheadline = content.vault_subheadline || DEFAULT_CONTENT.vault_subheadline;
+  const description = content.vault_description || DEFAULT_CONTENT.vault_description;
+  const features = (content.vault_features || DEFAULT_CONTENT.vault_features).split('|');
+
   return (
     <section id="vault" className="py-20 bg-[#09090B]" data-testid="vault-section">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <h2 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-black text-white uppercase text-center mb-4">
-          <span className="underline-red">One Vault. Four Eras. Infinite Play.</span>
+          <span className="underline-red">{headline}</span>
         </h2>
         <p className="text-white/70 text-center mb-12 max-w-2xl mx-auto">
-          The revolutionary concept that changes everything.
+          {subheadline}
         </p>
+
+        {/* Multi-Cover Banner */}
+        {games.length > 0 && (
+          <div className="mb-12 overflow-hidden">
+            <div className="flex justify-center gap-2 sm:gap-4">
+              {games.slice(0, 5).map((game, index) => (
+                <div 
+                  key={game.id} 
+                  className="relative group"
+                  style={{ transform: `rotate(${(index - 2) * 3}deg)` }}
+                >
+                  <img 
+                    src={game.cover_image} 
+                    alt={game.title}
+                    className="w-20 sm:w-28 md:w-36 h-auto rounded-md border-2 border-white/20 group-hover:border-[#C8102E] transition-all shadow-lg"
+                  />
+                  <div className="absolute bottom-0 left-0 right-0 bg-black/80 text-white text-xs font-heading text-center py-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {game.title}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Concept Description */}
         <div className="max-w-4xl mx-auto mb-12">
           <div className="bg-black p-6 sm:p-8 rounded-md border border-white/10">
-            <p className="text-white/90 text-base sm:text-lg leading-relaxed mb-6">
-              The NBA 2K Legacy Vault is a revolutionary 'game-within-a-game' mode. Launch full, untouched versions of 2K15, 2K16, 2K17, and 2K20 directly inside modern NBA 2K — powered by secure containers on persistent online servers.
-            </p>
-            <p className="text-white/90 text-base sm:text-lg leading-relaxed mb-6">
-              <span className="text-[#C8102E] font-bold">No more sunsets.</span> No player-base split. No cheating.
-            </p>
-            <p className="text-white/90 text-base sm:text-lg leading-relaxed">
-              Friends list works across every era. Park, Pro-Am, Rec, MyTEAM, MyCAREER — all alive forever.
-              <br /><br />
-              <span className="text-[#C8102E]">Monetization?</span> Simple subscription or one-time DLC to unlock the Vault. Cosmetic packs per era. High-margin nostalgia revenue that prints money while keeping the community together.
-            </p>
+            {description.split('\n\n').map((para, index) => (
+              <p key={index} className="text-white/90 text-base sm:text-lg leading-relaxed mb-4 last:mb-0">
+                {para.includes('No more sunsets') ? (
+                  <><span className="text-[#C8102E] font-bold">No more sunsets.</span> {para.replace('No more sunsets. ', '')}</>
+                ) : para.includes('Monetization?') ? (
+                  <><span className="text-[#C8102E]">Monetization?</span> {para.replace('Monetization? ', '')}</>
+                ) : para}
+              </p>
+            ))}
           </div>
         </div>
 
@@ -414,16 +441,10 @@ const VaultSection = () => {
         {/* Features List */}
         <div className="max-w-2xl mx-auto mb-12">
           <ul className="space-y-3">
-            {[
-              "Eternal online for every classic",
-              "Unified progression & friends",
-              "Cheat-proof containers",
-              "Recurring revenue stream for 2K",
-              "OG retention + new players discovering history"
-            ].map((feature, index) => (
+            {features.map((feature, index) => (
               <li key={index} className="flex items-center gap-3 text-white/90">
                 <span className="w-2 h-2 rounded-full bg-[#C8102E] flex-shrink-0"></span>
-                {feature}
+                {feature.trim()}
               </li>
             ))}
           </ul>
