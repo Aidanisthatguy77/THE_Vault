@@ -1130,7 +1130,7 @@ const ContentManagement = () => {
     <div data-testid="content-management">
       <div className="mb-6">
         <h2 className="font-heading text-2xl font-bold text-white uppercase">Edit Site Content</h2>
-        <p className="text-white/60 text-sm">Customize all the text on your site</p>
+        <p className="text-white/60 text-sm">Customize all the text on your site including your Google Doc link</p>
       </div>
 
       <div className="space-y-6">
@@ -1164,6 +1164,228 @@ const ContentManagement = () => {
           </div>
         ))}
       </div>
+    </div>
+  );
+};
+
+// Proof of Demand Management
+const ProofManagement = () => {
+  const [proofs, setProofs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editProof, setEditProof] = useState(null);
+  const [formData, setFormData] = useState({
+    image_url: '',
+    title: '',
+    description: '',
+    source: '',
+    order: 0
+  });
+
+  const fetchProofs = async () => {
+    try {
+      const response = await axios.get(`${API}/proof`);
+      setProofs(response.data);
+    } catch (error) {
+      console.error('Error:', error);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchProofs();
+  }, []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.image_url || !formData.title) {
+      toast.error("Image URL and title are required");
+      return;
+    }
+
+    try {
+      if (editProof) {
+        await axios.put(`${API}/proof/${editProof.id}`, formData);
+        toast.success("Proof updated!");
+      } else {
+        await axios.post(`${API}/proof`, formData);
+        toast.success("Proof added!");
+      }
+      setShowForm(false);
+      setEditProof(null);
+      setFormData({ image_url: '', title: '', description: '', source: '', order: 0 });
+      fetchProofs();
+    } catch (error) {
+      toast.error("Failed to save proof");
+    }
+  };
+
+  const handleEdit = (proof) => {
+    setEditProof(proof);
+    setFormData({
+      image_url: proof.image_url,
+      title: proof.title,
+      description: proof.description || '',
+      source: proof.source || '',
+      order: proof.order || 0
+    });
+    setShowForm(true);
+  };
+
+  const handleDelete = async (proofId) => {
+    if (!window.confirm("Delete this proof?")) return;
+    try {
+      await axios.delete(`${API}/proof/${proofId}`);
+      toast.success("Proof deleted!");
+      fetchProofs();
+    } catch (error) {
+      toast.error("Failed to delete proof");
+    }
+  };
+
+  const openAddForm = () => {
+    setEditProof(null);
+    setFormData({ image_url: '', title: '', description: '', source: '', order: 0 });
+    setShowForm(true);
+  };
+
+  if (loading) {
+    return <div className="spinner mx-auto mt-8"></div>;
+  }
+
+  return (
+    <div data-testid="proof-management">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div>
+          <h2 className="font-heading text-2xl font-bold text-white uppercase">Proof of Demand ({proofs.length})</h2>
+          <p className="text-white/60 text-sm">Add screenshots showing community demand - tweets, Reddit posts, YouTube comments, etc.</p>
+        </div>
+        <Button onClick={openAddForm} className="btn-primary">
+          <Plus size={18} className="mr-2" /> Add Proof
+        </Button>
+      </div>
+
+      {/* How to add proof */}
+      <div className="bg-[#09090B] p-4 rounded-md border border-white/10 mb-6">
+        <h3 className="font-heading text-lg font-bold text-white uppercase mb-2">How to Add Proof Screenshots</h3>
+        <div className="text-white/70 text-sm space-y-1">
+          <p>1. Take a screenshot of a tweet, Reddit post, YouTube comment, etc.</p>
+          <p>2. Upload it to <a href="https://imgur.com" target="_blank" rel="noopener noreferrer" className="text-[#C8102E] hover:underline">imgur.com</a> or any image host</p>
+          <p>3. Copy the direct image URL (ends in .jpg, .png, etc.)</p>
+          <p>4. Paste it here with a title and description</p>
+        </div>
+      </div>
+
+      {/* Proofs Grid */}
+      {proofs.length === 0 ? (
+        <p className="text-white/50 text-center py-8">No proof added yet. Add screenshots showing demand!</p>
+      ) : (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {proofs.map((proof) => (
+            <div key={proof.id} className="bg-black rounded-md border border-white/10 overflow-hidden">
+              <img 
+                src={proof.image_url} 
+                alt={proof.title}
+                className="w-full h-48 object-cover"
+              />
+              <div className="p-4">
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="font-bold text-white">{proof.title}</h4>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(proof)} className="h-6 w-6 text-white/60 hover:text-white">
+                      <Pencil size={14} />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(proof.id)} className="h-6 w-6 text-white/60 hover:text-[#C8102E]">
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                </div>
+                {proof.description && (
+                  <p className="text-white/60 text-sm mb-2">{proof.description}</p>
+                )}
+                {proof.source && (
+                  <p className="text-[#C8102E] text-xs">Source: {proof.source}</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add/Edit Proof Modal */}
+      <Dialog open={showForm} onOpenChange={() => { setShowForm(false); setEditProof(null); }}>
+        <DialogContent className="bg-[#09090B] border-white/10 max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-2xl font-bold text-white uppercase">
+              {editProof ? 'Edit Proof' : 'Add Proof of Demand'}
+            </DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+            <div>
+              <label className="text-white/70 text-sm mb-1 block">Image URL *</label>
+              <Input
+                placeholder="https://i.imgur.com/example.png"
+                value={formData.image_url}
+                onChange={(e) => setFormData({...formData, image_url: e.target.value})}
+                className="bg-black border-white/20 text-white"
+              />
+              {formData.image_url && (
+                <img src={formData.image_url} alt="Preview" className="mt-2 w-full h-32 object-cover rounded" />
+              )}
+            </div>
+
+            <div>
+              <label className="text-white/70 text-sm mb-1 block">Title *</label>
+              <Input
+                placeholder="Tweet from @NBA2K asking for legacy servers"
+                value={formData.title}
+                onChange={(e) => setFormData({...formData, title: e.target.value})}
+                className="bg-black border-white/20 text-white"
+              />
+            </div>
+
+            <div>
+              <label className="text-white/70 text-sm mb-1 block">Description (optional)</label>
+              <Textarea
+                placeholder="10K likes showing massive demand..."
+                value={formData.description}
+                onChange={(e) => setFormData({...formData, description: e.target.value})}
+                className="bg-black border-white/20 text-white min-h-[80px]"
+              />
+            </div>
+
+            <div>
+              <label className="text-white/70 text-sm mb-1 block">Source (optional)</label>
+              <Input
+                placeholder="Twitter, Reddit, YouTube, etc."
+                value={formData.source}
+                onChange={(e) => setFormData({...formData, source: e.target.value})}
+                className="bg-black border-white/20 text-white"
+              />
+            </div>
+
+            <div>
+              <label className="text-white/70 text-sm mb-1 block">Display Order</label>
+              <Input
+                type="number"
+                value={formData.order}
+                onChange={(e) => setFormData({...formData, order: parseInt(e.target.value) || 0})}
+                className="bg-black border-white/20 text-white w-24"
+              />
+            </div>
+
+            <DialogFooter className="pt-4">
+              <Button type="button" variant="outline" onClick={() => setShowForm(false)} className="border-white/20 text-white hover:bg-white/10">
+                Cancel
+              </Button>
+              <Button type="submit" className="btn-primary">
+                {editProof ? 'Update Proof' : 'Add Proof'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
