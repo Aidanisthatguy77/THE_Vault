@@ -342,13 +342,22 @@ const GamesSection = ({ games }) => {
 };
 
 // Vault Section
-const VaultSection = ({ content, games, proofs }) => {
+const VaultSection = ({ content, games, proofs, mockups }) => {
   const headline = content.vault_headline || DEFAULT_CONTENT.vault_headline;
   const subheadline = content.vault_subheadline || DEFAULT_CONTENT.vault_subheadline;
   const description = content.vault_description || DEFAULT_CONTENT.vault_description;
   const features = (content.vault_features || DEFAULT_CONTENT.vault_features).split('|');
   const googleDocUrl = content.google_doc_url || DEFAULT_CONTENT.google_doc_url;
   const googleDocLabel = content.google_doc_label || DEFAULT_CONTENT.google_doc_label;
+
+  // Default fallback mockups if none in database
+  const defaultMockups = [
+    { id: 'default-1', title: 'Vault Menu', description: 'Vault menu showing all four game icons in modern 2K', media_type: 'placeholder', type: 'vault-menu' },
+    { id: 'default-2', title: 'ENTERING 2K16...', description: 'Loading screen transitioning into classic era', media_type: 'placeholder', type: 'loading' },
+    { id: 'default-3', title: 'Unified Friends', description: 'Unified friends list across all eras', media_type: 'placeholder', type: 'friends' }
+  ];
+
+  const displayMockups = mockups && mockups.length > 0 ? mockups : defaultMockups;
 
   return (
     <section id="vault" className="py-20 bg-[#09090B]" data-testid="vault-section">
@@ -445,56 +454,65 @@ const VaultSection = ({ content, games, proofs }) => {
           </div>
         )}
 
-        {/* Mockup Cards */}
+        {/* Dynamic Mockup Cards */}
         <div className="grid md:grid-cols-3 gap-6 mb-12">
-          <div className="bg-black p-6 rounded-md border border-white/10 text-center" data-testid="mockup-1">
-            <div className="w-full aspect-video bg-[#09090B] rounded-md flex items-center justify-center mb-4 border border-[#C8102E]/30">
-              <div className="text-center">
-                <Trophy className="w-12 h-12 text-[#C8102E] mx-auto mb-2" />
-                <p className="font-heading text-white uppercase text-sm">Vault Menu</p>
-                <div className="flex justify-center gap-2 mt-2">
-                  {['15', '16', '17', '20'].map(year => (
-                    <div key={year} className="w-10 h-10 border border-white/30 rounded flex items-center justify-center text-white text-xs font-bold">
-                      {year}
+          {displayMockups.map((mockup, index) => (
+            <div key={mockup.id} className="bg-black p-6 rounded-md border border-white/10 text-center" data-testid={`mockup-${index + 1}`}>
+              <div className="w-full aspect-video bg-[#09090B] rounded-md flex items-center justify-center mb-4 border border-[#C8102E]/30 overflow-hidden">
+                {mockup.media_type === 'video' && mockup.video_embed_url ? (
+                  <iframe
+                    src={mockup.video_embed_url}
+                    title={mockup.title}
+                    className="w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  ></iframe>
+                ) : mockup.image_url ? (
+                  <img src={mockup.image_url} alt={mockup.title} className="w-full h-full object-cover" />
+                ) : mockup.type === 'vault-menu' ? (
+                  <div className="text-center">
+                    <Trophy className="w-12 h-12 text-[#C8102E] mx-auto mb-2" />
+                    <p className="font-heading text-white uppercase text-sm">Vault Menu</p>
+                    <div className="flex justify-center gap-2 mt-2">
+                      {['15', '16', '17', '20'].map(year => (
+                        <div key={year} className="w-10 h-10 border border-white/30 rounded flex items-center justify-center text-white text-xs font-bold">
+                          {year}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <p className="text-white/70 text-sm">Vault menu showing all four game icons in modern 2K</p>
-          </div>
-
-          <div className="bg-black p-6 rounded-md border border-white/10 text-center" data-testid="mockup-2">
-            <div className="w-full aspect-video bg-[#09090B] rounded-md flex items-center justify-center mb-4 border border-[#C8102E]/30">
-              <div className="text-center">
-                <div className="spinner mx-auto mb-3"></div>
-                <p className="font-heading text-white uppercase">Entering <span className="text-[#C8102E]">2K16</span>...</p>
-              </div>
-            </div>
-            <p className="text-white/70 text-sm">Loading screen transitioning into classic era</p>
-          </div>
-
-          <div className="bg-black p-6 rounded-md border border-white/10 text-center" data-testid="mockup-3">
-            <div className="w-full aspect-video bg-[#09090B] rounded-md flex items-center justify-center mb-4 border border-[#C8102E]/30">
-              <div className="grid grid-cols-2 gap-2 p-4 w-full">
-                <div className="bg-black/50 p-2 rounded border border-white/20">
-                  <p className="text-[#C8102E] text-xs font-heading uppercase">2K15 Park</p>
-                  <div className="flex gap-1 mt-1">
-                    <div className="w-4 h-4 rounded-full bg-white/30"></div>
-                    <div className="w-4 h-4 rounded-full bg-white/30"></div>
                   </div>
-                </div>
-                <div className="bg-black/50 p-2 rounded border border-white/20">
-                  <p className="text-white text-xs font-heading uppercase">Friends</p>
-                  <div className="flex gap-1 mt-1">
-                    <div className="w-4 h-4 rounded-full bg-[#C8102E]/50"></div>
-                    <div className="w-4 h-4 rounded-full bg-[#C8102E]/50"></div>
+                ) : mockup.type === 'loading' ? (
+                  <div className="text-center">
+                    <div className="spinner mx-auto mb-3"></div>
+                    <p className="font-heading text-white uppercase">Entering <span className="text-[#C8102E]">2K16</span>...</p>
                   </div>
-                </div>
+                ) : mockup.type === 'friends' ? (
+                  <div className="grid grid-cols-2 gap-2 p-4 w-full">
+                    <div className="bg-black/50 p-2 rounded border border-white/20">
+                      <p className="text-[#C8102E] text-xs font-heading uppercase">2K15 Park</p>
+                      <div className="flex gap-1 mt-1">
+                        <div className="w-4 h-4 rounded-full bg-white/30"></div>
+                        <div className="w-4 h-4 rounded-full bg-white/30"></div>
+                      </div>
+                    </div>
+                    <div className="bg-black/50 p-2 rounded border border-white/20">
+                      <p className="text-white text-xs font-heading uppercase">Friends</p>
+                      <div className="flex gap-1 mt-1">
+                        <div className="w-4 h-4 rounded-full bg-[#C8102E]/50"></div>
+                        <div className="w-4 h-4 rounded-full bg-[#C8102E]/50"></div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center p-4">
+                    <Trophy className="w-12 h-12 text-[#C8102E] mx-auto mb-2" />
+                    <p className="font-heading text-white uppercase text-sm">{mockup.title}</p>
+                  </div>
+                )}
               </div>
+              <p className="text-white/70 text-sm">{mockup.description}</p>
             </div>
-            <p className="text-white/70 text-sm">Unified friends list across all eras</p>
-          </div>
+          ))}
         </div>
 
         {/* Features List */}
