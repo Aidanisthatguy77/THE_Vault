@@ -723,6 +723,11 @@ const CommunitySection = () => {
           Join the conversation. Help make this vision a reality.
         </p>
 
+        {/* Petition Counter - Featured */}
+        <div className="max-w-2xl mx-auto mb-12">
+          <PetitionCounter />
+        </div>
+
         <div className="grid lg:grid-cols-2 gap-12">
           <CommentsSection />
           <div>
