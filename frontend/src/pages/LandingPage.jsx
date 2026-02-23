@@ -13,6 +13,23 @@ const API = `${BACKEND_URL}/api`;
 const SHARE_URL = "https://docs.google.com/document/d/1DEb_W0fxCGWaGN97KcVkVqD1JmZEOUrl5DpCCaayHe0/edit?tab=t.0#heading=h.4a00a8jkgs1z";
 const SHARE_TEXT = "This Legacy Vault concept would change NBA 2K forever 🔥";
 
+// Default content fallbacks
+const DEFAULT_CONTENT = {
+  vault_headline: "One Vault. Four Eras. Infinite Play.",
+  vault_subheadline: "The revolutionary concept that changes everything.",
+  vault_description: `The NBA 2K Legacy Vault is a revolutionary 'game-within-a-game' mode. Launch full, untouched versions of 2K15, 2K16, 2K17, and 2K20 directly inside modern NBA 2K — powered by secure containers on persistent online servers.
+
+No more sunsets. No player-base split. No cheating.
+
+Friends list works across every era. Park, Pro-Am, Rec, MyTEAM, MyCAREER — all alive forever.
+
+Monetization? Simple subscription or one-time DLC to unlock the Vault. Cosmetic packs per era. High-margin nostalgia revenue that prints money while keeping the community together.`,
+  vault_features: "Eternal online for every classic|Unified progression & friends|Cheat-proof containers|Recurring revenue stream for 2K|OG retention + new players discovering history",
+  hero_headline: "The NBA 2K Legacy Vault",
+  hero_subheadline: "2K15 • 2K16 • 2K17 • 2K20 — All in one place.",
+  hero_tagline: "Persistent online. No resets. Ever."
+};
+
 // Header Component
 const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
