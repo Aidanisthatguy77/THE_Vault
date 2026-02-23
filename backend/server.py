@@ -537,6 +537,39 @@ Monetization? Simple subscription or one-time DLC to unlock the Vault. Cosmetic 
     
     return {"message": "Default content seeded"}
 
+# ============ PROOF OF DEMAND ROUTES ============
+
+@api_router.get("/proof")
+async def get_all_proof():
+    """Get all proof of demand items"""
+    proof = await db.proof.find({}, {"_id": 0}).sort("order", 1).to_list(100)
+    return proof
+
+@api_router.post("/proof", response_model=Proof)
+async def create_proof(proof_data: ProofCreate):
+    proof = Proof(**proof_data.model_dump())
+    doc = proof.model_dump()
+    await db.proof.insert_one(doc)
+    return proof
+
+@api_router.put("/proof/{proof_id}", response_model=Proof)
+async def update_proof(proof_id: str, proof_data: ProofUpdate):
+    existing = await db.proof.find_one({"id": proof_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Proof not found")
+    
+    update_data = {k: v for k, v in proof_data.model_dump().items() if v is not None}
+    await db.proof.update_one({"id": proof_id}, {"$set": update_data})
+    updated = await db.proof.find_one({"id": proof_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/proof/{proof_id}")
+async def delete_proof(proof_id: str):
+    result = await db.proof.delete_one({"id": proof_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Proof not found")
+    return {"message": "Proof deleted"}
+
 # Include the router in the main app
 app.include_router(api_router)
 
