@@ -577,8 +577,74 @@ async def delete_proof(proof_id: str):
         raise HTTPException(status_code=404, detail="Proof not found")
     return {"message": "Proof deleted"}
 
+# ============ FILE UPLOAD ROUTES ============
+
+@api_router.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    """Upload an image file and return the URL"""
+    # Validate file type
+    allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Invalid file type. Only JPEG, PNG, GIF, and WebP allowed.")
+    
+    # Generate unique filename
+    ext = file.filename.split('.')[-1] if '.' in file.filename else 'png'
+    filename = f"{uuid.uuid4()}.{ext}"
+    file_path = UPLOAD_DIR / filename
+    
+    # Save file
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
+    # Return the URL path
+    return {"url": f"/api/uploads/{filename}", "filename": filename}
+
+class Base64Upload(BaseModel):
+    data: str  # base64 encoded image data
+    filename: Optional[str] = "pasted_image.png"
+
+@api_router.post("/upload/base64")
+async def upload_base64(upload: Base64Upload):
+    """Upload a base64 encoded image (for clipboard paste)"""
+    try:
+        # Parse base64 data
+        if ',' in upload.data:
+            header, data = upload.data.split(',', 1)
+            # Determine file type from header
+            if 'png' in header:
+                ext = 'png'
+            elif 'jpeg' in header or 'jpg' in header:
+                ext = 'jpg'
+            elif 'gif' in header:
+                ext = 'gif'
+            elif 'webp' in header:
+                ext = 'webp'
+            else:
+                ext = 'png'
+        else:
+            data = upload.data
+            ext = 'png'
+        
+        # Decode
+        image_data = base64.b64decode(data)
+        
+        # Generate unique filename
+        filename = f"{uuid.uuid4()}.{ext}"
+        file_path = UPLOAD_DIR / filename
+        
+        # Save file
+        with open(file_path, "wb") as f:
+            f.write(image_data)
+        
+        return {"url": f"/api/uploads/{filename}", "filename": filename}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to process image: {str(e)}")
+
 # Include the router in the main app
 app.include_router(api_router)
+
+# Mount uploads directory for serving files
+app.mount("/api/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,
