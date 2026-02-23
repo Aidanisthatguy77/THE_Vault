@@ -961,19 +961,27 @@ const MobileBottomNav = () => {
 // Main Landing Page
 const LandingPage = () => {
   const [games, setGames] = useState([]);
+  const [content, setContent] = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchGames = async () => {
+    const fetchData = async () => {
       try {
-        const response = await axios.get(`${API}/games`);
-        setGames(response.data);
+        const [gamesRes, contentRes] = await Promise.all([
+          axios.get(`${API}/games`),
+          axios.get(`${API}/content`)
+        ]);
+        setGames(gamesRes.data);
+        setContent(contentRes.data);
       } catch (error) {
-        console.error('Error fetching games:', error);
+        console.error('Error fetching data:', error);
       }
       setLoading(false);
     };
-    fetchGames();
+    
+    // Seed content on first load
+    axios.post(`${API}/content/seed`).catch(() => {});
+    fetchData();
   }, []);
 
   if (loading) {
@@ -987,9 +995,9 @@ const LandingPage = () => {
   return (
     <div className="min-h-screen bg-black pb-16 md:pb-0">
       <Header />
-      <HeroSection />
+      <HeroSection content={content} />
       <GamesSection games={games} />
-      <VaultSection />
+      <VaultSection content={content} games={games} />
       <CommunitySection />
       <Footer />
       <MobileBottomNav />
