@@ -1459,6 +1459,7 @@ const AdminPage = () => {
 
         {activeTab === 'games' && <GamesManagement />}
         {activeTab === 'clips' && <ClipsManagement />}
+        {activeTab === 'proof' && <ProofManagement />}
         {activeTab === 'content' && <ContentManagement />}
         {activeTab === 'comments' && <CommentsManagement />}
         {activeTab === 'subscribers' && <SubscriptionsManagement />}
