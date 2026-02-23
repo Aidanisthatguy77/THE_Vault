@@ -605,6 +605,82 @@ async def delete_proof(proof_id: str):
         raise HTTPException(status_code=404, detail="Proof not found")
     return {"message": "Proof deleted"}
 
+# ============ VAULT MOCKUP ROUTES ============
+
+@api_router.get("/mockups")
+async def get_all_mockups():
+    """Get all vault mockups"""
+    mockups = await db.mockups.find({}, {"_id": 0}).sort("order", 1).to_list(100)
+    return mockups
+
+@api_router.post("/mockups", response_model=Mockup)
+async def create_mockup(mockup_data: MockupCreate):
+    mockup = Mockup(**mockup_data.model_dump())
+    doc = mockup.model_dump()
+    await db.mockups.insert_one(doc)
+    return mockup
+
+@api_router.put("/mockups/{mockup_id}", response_model=Mockup)
+async def update_mockup(mockup_id: str, mockup_data: MockupUpdate):
+    existing = await db.mockups.find_one({"id": mockup_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Mockup not found")
+    
+    update_data = {k: v for k, v in mockup_data.model_dump().items() if v is not None}
+    await db.mockups.update_one({"id": mockup_id}, {"$set": update_data})
+    updated = await db.mockups.find_one({"id": mockup_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/mockups/{mockup_id}")
+async def delete_mockup(mockup_id: str):
+    result = await db.mockups.delete_one({"id": mockup_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Mockup not found")
+    return {"message": "Mockup deleted"}
+
+@api_router.post("/mockups/seed")
+async def seed_default_mockups():
+    """Seed default mockup cards"""
+    count = await db.mockups.count_documents({})
+    if count > 0:
+        return {"message": "Mockups already seeded", "count": count}
+    
+    default_mockups = [
+        {
+            "id": str(uuid.uuid4()),
+            "title": "Vault Menu",
+            "description": "Vault menu showing all four game icons in modern 2K",
+            "media_type": "image",
+            "image_url": None,
+            "video_embed_url": None,
+            "order": 1,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "title": "ENTERING 2K16...",
+            "description": "Loading screen transitioning into classic era",
+            "media_type": "image",
+            "image_url": None,
+            "video_embed_url": None,
+            "order": 2,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "title": "Unified Friends",
+            "description": "Unified friends list across all eras",
+            "media_type": "image",
+            "image_url": None,
+            "video_embed_url": None,
+            "order": 3,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+    ]
+    
+    await db.mockups.insert_many(default_mockups)
+    return {"message": "Mockups seeded", "count": len(default_mockups)}
+
 # ============ FILE UPLOAD ROUTES ============
 
 @api_router.post("/upload")
