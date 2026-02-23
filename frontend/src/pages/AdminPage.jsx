@@ -1508,6 +1508,386 @@ const ProofManagement = () => {
   );
 };
 
+// Mockups Management (Vault Section Cards)
+const MockupsManagement = () => {
+  const [mockups, setMockups] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editMockup, setEditMockup] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    media_type: 'image',
+    image_url: '',
+    video_embed_url: '',
+    order: 0
+  });
+
+  const fetchMockups = async () => {
+    try {
+      const response = await axios.get(`${API}/mockups`);
+      setMockups(response.data);
+    } catch (error) {
+      console.error('Error:', error);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    // Seed defaults first
+    axios.post(`${API}/mockups/seed`).catch(() => {});
+    fetchMockups();
+  }, []);
+
+  // Handle file upload
+  const handleFileUpload = async (file) => {
+    if (!file) return;
+    
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Only JPEG, PNG, GIF, and WebP images are allowed");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formDataUpload = new FormData();
+      formDataUpload.append('file', file);
+      
+      const response = await axios.post(`${API}/upload`, formDataUpload, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      const imageUrl = `${BACKEND_URL}${response.data.url}`;
+      setFormData(prev => ({ ...prev, image_url: imageUrl, media_type: 'image' }));
+      toast.success("Image uploaded!");
+    } catch (error) {
+      toast.error("Failed to upload image");
+    }
+    setUploading(false);
+  };
+
+  // Handle clipboard paste
+  const handlePaste = async (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        e.preventDefault();
+        const file = items[i].getAsFile();
+        if (file) {
+          setUploading(true);
+          try {
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+              const base64Data = event.target.result;
+              const response = await axios.post(`${API}/upload/base64`, {
+                data: base64Data,
+                filename: 'pasted_image.png'
+              });
+              const imageUrl = `${BACKEND_URL}${response.data.url}`;
+              setFormData(prev => ({ ...prev, image_url: imageUrl, media_type: 'image' }));
+              toast.success("Screenshot pasted!");
+              setUploading(false);
+            };
+            reader.readAsDataURL(file);
+          } catch (error) {
+            toast.error("Failed to paste image");
+            setUploading(false);
+          }
+        }
+        break;
+      }
+    }
+  };
+
+  // Handle drag and drop
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) {
+      handleFileUpload(files[0]);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.title || !formData.description) {
+      toast.error("Title and description are required");
+      return;
+    }
+    if (formData.media_type === 'video' && !formData.video_embed_url) {
+      toast.error("Video embed URL is required for video type");
+      return;
+    }
+
+    try {
+      if (editMockup) {
+        await axios.put(`${API}/mockups/${editMockup.id}`, formData);
+        toast.success("Mockup updated!");
+      } else {
+        await axios.post(`${API}/mockups`, formData);
+        toast.success("Mockup added!");
+      }
+      setShowForm(false);
+      setEditMockup(null);
+      setFormData({ title: '', description: '', media_type: 'image', image_url: '', video_embed_url: '', order: 0 });
+      fetchMockups();
+    } catch (error) {
+      toast.error("Failed to save mockup");
+    }
+  };
+
+  const handleEdit = (mockup) => {
+    setEditMockup(mockup);
+    setFormData({
+      title: mockup.title,
+      description: mockup.description,
+      media_type: mockup.media_type || 'image',
+      image_url: mockup.image_url || '',
+      video_embed_url: mockup.video_embed_url || '',
+      order: mockup.order || 0
+    });
+    setShowForm(true);
+  };
+
+  const handleDelete = async (mockupId) => {
+    if (!window.confirm("Delete this mockup?")) return;
+    try {
+      await axios.delete(`${API}/mockups/${mockupId}`);
+      toast.success("Mockup deleted!");
+      fetchMockups();
+    } catch (error) {
+      toast.error("Failed to delete mockup");
+    }
+  };
+
+  const openAddForm = () => {
+    setEditMockup(null);
+    setFormData({ title: '', description: '', media_type: 'image', image_url: '', video_embed_url: '', order: 0 });
+    setShowForm(true);
+  };
+
+  if (loading) {
+    return <div className="spinner mx-auto mt-8"></div>;
+  }
+
+  return (
+    <div data-testid="mockups-management">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div>
+          <h2 className="font-heading text-2xl font-bold text-white uppercase">Vault Mockups ({mockups.length})</h2>
+          <p className="text-white/60 text-sm">Manage the concept cards in the Vault section - add images or video embeds</p>
+        </div>
+        <Button onClick={openAddForm} className="btn-primary" data-testid="add-mockup-btn">
+          <Plus size={18} className="mr-2" /> Add Mockup
+        </Button>
+      </div>
+
+      {/* Mockups Grid */}
+      {mockups.length === 0 ? (
+        <p className="text-white/50 text-center py-8">No mockups yet. Add concept cards to showcase in the Vault section!</p>
+      ) : (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {mockups.map((mockup) => (
+            <div key={mockup.id} className="bg-black rounded-md border border-white/10 overflow-hidden" data-testid={`mockup-item-${mockup.id}`}>
+              <div className="aspect-video bg-[#09090B] flex items-center justify-center overflow-hidden">
+                {mockup.media_type === 'video' && mockup.video_embed_url ? (
+                  <iframe
+                    src={mockup.video_embed_url}
+                    title={mockup.title}
+                    className="w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  ></iframe>
+                ) : mockup.image_url ? (
+                  <img src={mockup.image_url} alt={mockup.title} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="text-center p-4">
+                    <Layout size={40} className="text-[#C8102E] mx-auto mb-2" />
+                    <p className="text-white/60 text-sm">{mockup.title}</p>
+                  </div>
+                )}
+              </div>
+              <div className="p-4">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <h4 className="font-bold text-white">{mockup.title}</h4>
+                    <span className={`text-xs px-2 py-0.5 rounded ${mockup.media_type === 'video' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                      {mockup.media_type}
+                    </span>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(mockup)} className="h-6 w-6 text-white/60 hover:text-white">
+                      <Pencil size={14} />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(mockup.id)} className="h-6 w-6 text-white/60 hover:text-[#C8102E]">
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-white/60 text-sm">{mockup.description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add/Edit Mockup Modal */}
+      <Dialog open={showForm} onOpenChange={() => { setShowForm(false); setEditMockup(null); }}>
+        <DialogContent className="bg-[#09090B] border-white/10 max-w-lg" data-testid="mockup-form-modal">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-2xl font-bold text-white uppercase">
+              {editMockup ? 'Edit Mockup' : 'Add Vault Mockup'}
+            </DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmit} className="space-y-4 mt-4" onPaste={handlePaste}>
+            <div>
+              <label className="text-white/70 text-sm mb-1 block">Title *</label>
+              <Input
+                placeholder="Vault Menu, ENTERING 2K16..."
+                value={formData.title}
+                onChange={(e) => setFormData({...formData, title: e.target.value})}
+                className="bg-black border-white/20 text-white"
+                data-testid="mockup-title-input"
+              />
+            </div>
+
+            <div>
+              <label className="text-white/70 text-sm mb-1 block">Description *</label>
+              <Textarea
+                placeholder="Description shown below the mockup..."
+                value={formData.description}
+                onChange={(e) => setFormData({...formData, description: e.target.value})}
+                className="bg-black border-white/20 text-white min-h-[80px]"
+                data-testid="mockup-description-input"
+              />
+            </div>
+
+            <div>
+              <label className="text-white/70 text-sm mb-1 block">Media Type</label>
+              <Select value={formData.media_type} onValueChange={(v) => setFormData({...formData, media_type: v})}>
+                <SelectTrigger className="bg-black border-white/20 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-[#09090B] border-white/10">
+                  <SelectItem value="image" className="text-white hover:bg-white/10">Image</SelectItem>
+                  <SelectItem value="video" className="text-white hover:bg-white/10">Video Embed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {formData.media_type === 'image' ? (
+              <div>
+                <label className="text-white/70 text-sm mb-2 block">Upload Image</label>
+                <div
+                  onDragEnter={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDragOver={handleDrag}
+                  onDrop={handleDrop}
+                  className={`relative border-2 border-dashed rounded-md p-6 text-center transition-colors ${
+                    dragActive ? 'border-[#C8102E] bg-[#C8102E]/10' : 'border-white/20 hover:border-white/40'
+                  }`}
+                >
+                  {uploading ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="spinner"></div>
+                      <p className="text-white/60 text-sm">Uploading...</p>
+                    </div>
+                  ) : formData.image_url ? (
+                    <div className="relative">
+                      <img src={formData.image_url} alt="Preview" className="max-h-32 mx-auto rounded" />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setFormData(prev => ({ ...prev, image_url: '' }))}
+                        className="absolute top-1 right-1 bg-black/50 hover:bg-black text-white h-6 w-6"
+                      >
+                        <X size={14} />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <Image size={32} className="text-white/40" />
+                      <p className="text-white/80 text-sm">Drag & drop, click, or <span className="text-[#C8102E]">paste (Ctrl+V)</span></p>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/gif,image/webp"
+                        onChange={(e) => handleFileUpload(e.target.files?.[0])}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="text-white/70 text-sm mb-1 block">Video Embed URL *</label>
+                <Input
+                  placeholder="https://www.youtube.com/embed/..."
+                  value={formData.video_embed_url}
+                  onChange={(e) => setFormData({...formData, video_embed_url: e.target.value})}
+                  className="bg-black border-white/20 text-white"
+                  data-testid="mockup-video-input"
+                />
+                <p className="text-white/50 text-xs mt-1">YouTube: Share → Embed → Copy URL from src="..."</p>
+                {formData.video_embed_url && (
+                  <div className="mt-2 aspect-video">
+                    <iframe
+                      src={formData.video_embed_url}
+                      title="Preview"
+                      className="w-full h-full rounded"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    ></iframe>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div>
+              <label className="text-white/70 text-sm mb-1 block">Display Order</label>
+              <Input
+                type="number"
+                value={formData.order}
+                onChange={(e) => setFormData({...formData, order: parseInt(e.target.value) || 0})}
+                className="bg-black border-white/20 text-white w-24"
+              />
+            </div>
+
+            <DialogFooter className="pt-4">
+              <Button type="button" variant="outline" onClick={() => setShowForm(false)} className="border-white/20 text-white hover:bg-white/10">
+                Cancel
+              </Button>
+              <Button type="submit" className="btn-primary" disabled={uploading} data-testid="submit-mockup-btn">
+                {editMockup ? 'Update Mockup' : 'Add Mockup'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
 // Main Admin Page
 const AdminPage = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
