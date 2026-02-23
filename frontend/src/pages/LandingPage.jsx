@@ -89,7 +89,11 @@ const Header = () => {
 };
 
 // Hero Section
-const HeroSection = () => {
+const HeroSection = ({ content }) => {
+  const headline = content.hero_headline || DEFAULT_CONTENT.hero_headline;
+  const subheadline = content.hero_subheadline || DEFAULT_CONTENT.hero_subheadline;
+  const tagline = content.hero_tagline || DEFAULT_CONTENT.hero_tagline;
+
   const scrollTo = (id) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
   };
