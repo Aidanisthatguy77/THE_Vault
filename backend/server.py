@@ -141,6 +141,31 @@ class SiteContent(BaseModel):
     value: str
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
+# Proof of Demand Model
+class ProofCreate(BaseModel):
+    image_url: str
+    title: str
+    description: Optional[str] = None
+    source: Optional[str] = None
+    order: int = 0
+
+class ProofUpdate(BaseModel):
+    image_url: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    source: Optional[str] = None
+    order: Optional[int] = None
+
+class Proof(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    image_url: str
+    title: str
+    description: Optional[str] = None
+    source: Optional[str] = None
+    order: int = 0
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
 # ============ GAME ROUTES ============
 
 @api_router.get("/games", response_model=List[Game])
