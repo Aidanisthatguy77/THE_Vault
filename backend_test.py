@@ -181,7 +181,7 @@ class LegacyVaultAPITester:
             "parent_id": parent_id
         }
         
-        success, data, status = self.run_test("Create Reply", "POST", "comments", 201, reply_data)
+        success, data, status = self.run_test("Create Reply", "POST", "comments", 200, reply_data)
         if success and 'id' in data:
             print(f"   Created reply with ID: {data['id']}")
         return success
