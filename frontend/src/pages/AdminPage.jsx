@@ -1090,6 +1090,8 @@ const ContentManagement = () => {
     { key: 'vault_subheadline', label: 'Vault Section Subheadline', type: 'text', placeholder: 'The revolutionary concept...' },
     { key: 'vault_description', label: 'Vault Concept Description', type: 'textarea', placeholder: 'The NBA 2K Legacy Vault is...' },
     { key: 'vault_features', label: 'Vault Features (separate with |)', type: 'textarea', placeholder: 'Feature 1|Feature 2|Feature 3' },
+    { key: 'google_doc_url', label: 'Google Doc / Full Concept Link', type: 'text', placeholder: 'https://docs.google.com/document/d/...' },
+    { key: 'google_doc_label', label: 'Google Doc Button Text', type: 'text', placeholder: 'Read the Full Concept Document' },
   ];
 
   const fetchContent = async () => {
