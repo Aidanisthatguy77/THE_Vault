@@ -467,7 +467,7 @@ const VaultSection = ({ content, games, proofs, mockups }) => {
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
                   ></iframe>
-                ) : mockup.image_url ? (
+                ) : mockup.image_url && mockup.image_url.length > 0 ? (
                   <img src={mockup.image_url} alt={mockup.title} className="w-full h-full object-cover" />
                 ) : mockup.type === 'vault-menu' ? (
                   <div className="text-center">
