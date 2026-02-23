@@ -94,13 +94,15 @@ Build a premium, fast-loading, fully mobile-responsive single-page PWA website f
 - Vault concept section with multi-cover banner
 - **Google Doc link button** with customizable text
 - **Proof of Demand gallery** showing screenshots
+- **Vault Mockup Cards** - fully customizable with images OR video embeds
 - Comments section with likes and admin replies
 - Email signup form
 - Petition counter with sign-up
 - Social share buttons
-- **Comprehensive Admin Panel with 7 tabs:**
+- **Comprehensive Admin Panel with 8 tabs:**
   - Games: CRUD, reorder, toggle visibility
   - Clips: Add YouTube/TikTok/Instagram clips per game
+  - **Mockups: Add/edit/delete vault concept cards with image upload OR video embeds**
   - Proof: **Direct file upload + clipboard paste (Ctrl+V)**
   - Content: Edit all site text including Google Doc link
   - Comments: View, delete, reply as admin with badge
@@ -126,6 +128,7 @@ Build a premium, fast-loading, fully mobile-responsive single-page PWA website f
 - [x] Mobile responsive
 - [x] **Proof of Demand with direct file upload and clipboard paste**
 - [x] **Google Doc link integration**
+- [x] **Vault Mockups management with image upload AND video embed support**
 
 ### P1 (High Priority)
 - [ ] Email notification system (SendGrid/Resend integration)
