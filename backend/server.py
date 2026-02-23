@@ -524,7 +524,9 @@ Monetization? Simple subscription or one-time DLC to unlock the Vault. Cosmetic 
         "vault_features": "Eternal online for every classic|Unified progression & friends|Cheat-proof containers|Recurring revenue stream for 2K|OG retention + new players discovering history",
         "hero_headline": "The NBA 2K Legacy Vault",
         "hero_subheadline": "2K15 • 2K16 • 2K17 • 2K20 — All in one place.",
-        "hero_tagline": "Persistent online. No resets. Ever."
+        "hero_tagline": "Persistent online. No resets. Ever.",
+        "google_doc_url": "https://docs.google.com/document/d/1DEb_W0fxCGWaGN97KcVkVqD1JmZEOUrl5DpCCaayHe0/edit?tab=t.0#heading=h.4a00a8jkgs1z",
+        "google_doc_label": "Read the Full Concept Document"
     }
     
     for key, value in defaults.items():
