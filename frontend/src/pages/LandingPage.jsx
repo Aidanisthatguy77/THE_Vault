@@ -342,11 +342,13 @@ const GamesSection = ({ games }) => {
 };
 
 // Vault Section
-const VaultSection = ({ content, games }) => {
+const VaultSection = ({ content, games, proofs }) => {
   const headline = content.vault_headline || DEFAULT_CONTENT.vault_headline;
   const subheadline = content.vault_subheadline || DEFAULT_CONTENT.vault_subheadline;
   const description = content.vault_description || DEFAULT_CONTENT.vault_description;
   const features = (content.vault_features || DEFAULT_CONTENT.vault_features).split('|');
+  const googleDocUrl = content.google_doc_url || DEFAULT_CONTENT.google_doc_url;
+  const googleDocLabel = content.google_doc_label || DEFAULT_CONTENT.google_doc_label;
 
   return (
     <section id="vault" className="py-20 bg-[#09090B]" data-testid="vault-section">
@@ -382,6 +384,23 @@ const VaultSection = ({ content, games }) => {
           </div>
         )}
 
+        {/* Google Doc Link Button */}
+        {googleDocUrl && (
+          <div className="text-center mb-8">
+            <a 
+              href={googleDocUrl} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-[#C8102E] hover:bg-[#9e0c24] text-white font-bold py-3 px-6 rounded-md transition-all"
+              data-testid="google-doc-link"
+            >
+              <FileText size={20} />
+              {googleDocLabel}
+              <ExternalLink size={16} />
+            </a>
+          </div>
+        )}
+
         {/* Concept Description */}
         <div className="max-w-4xl mx-auto mb-12">
           <div className="bg-black p-6 sm:p-8 rounded-md border border-white/10">
@@ -396,6 +415,35 @@ const VaultSection = ({ content, games }) => {
             ))}
           </div>
         </div>
+
+        {/* Proof of Demand Gallery */}
+        {proofs && proofs.length > 0 && (
+          <div className="mb-12">
+            <h3 className="font-heading text-2xl font-bold text-white uppercase text-center mb-6">
+              <span className="text-[#C8102E]">Proof</span> of Demand
+            </h3>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {proofs.map((proof) => (
+                <div key={proof.id} className="bg-black rounded-md border border-white/10 overflow-hidden group">
+                  <img 
+                    src={proof.image_url} 
+                    alt={proof.title}
+                    className="w-full h-48 object-cover group-hover:scale-105 transition-transform"
+                  />
+                  <div className="p-3">
+                    <h4 className="text-white font-bold text-sm">{proof.title}</h4>
+                    {proof.description && (
+                      <p className="text-white/60 text-xs mt-1">{proof.description}</p>
+                    )}
+                    {proof.source && (
+                      <p className="text-[#C8102E] text-xs mt-1">Source: {proof.source}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Mockup Cards */}
         <div className="grid md:grid-cols-3 gap-6 mb-12">
