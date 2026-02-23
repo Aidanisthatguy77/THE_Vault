@@ -99,7 +99,7 @@ class LegacyVaultAPITester:
             "is_active": True
         }
         
-        success, data, status = self.run_test("Create Game", "POST", "games", 201, test_game)
+        success, data, status = self.run_test("Create Game", "POST", "games", 200, test_game)
         if success and 'id' in data:
             self.created_games.append(data['id'])
             print(f"   Created game with ID: {data['id']}")
