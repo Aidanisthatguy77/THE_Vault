@@ -433,20 +433,34 @@ const VaultSection = ({ content, games, proofs, mockups }) => {
             </h3>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {proofs.map((proof) => (
-                <div key={proof.id} className="bg-black rounded-md border border-white/10 overflow-hidden group">
+                <div key={proof.id} className="bg-black rounded-md border border-white/10 overflow-hidden group" data-testid={`proof-card-${proof.id}`}>
                   <img 
                     src={proof.image_url} 
                     alt={proof.title}
                     className="w-full h-48 object-cover group-hover:scale-105 transition-transform"
                   />
                   <div className="p-3">
-                    <h4 className="text-white font-bold text-sm">{proof.title}</h4>
-                    {proof.description && (
-                      <p className="text-white/60 text-xs mt-1">{proof.description}</p>
-                    )}
-                    {proof.source && (
-                      <p className="text-[#C8102E] text-xs mt-1">Source: {proof.source}</p>
-                    )}
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="flex-1">
+                        <h4 className="text-white font-bold text-sm">{proof.title}</h4>
+                        {proof.description && (
+                          <p className="text-white/60 text-xs mt-1">{proof.description}</p>
+                        )}
+                        {proof.source && (
+                          <p className="text-[#C8102E] text-xs mt-1">Source: {proof.source}</p>
+                        )}
+                      </div>
+                      <a
+                        href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`The community wants NBA 2K Legacy Servers back! ${proof.title} - Check out the proof: ${SHARE_URL} @NBA2K #NBA2K #LegacyVault #BringBack2K`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-shrink-0 bg-[#1DA1F2] hover:bg-[#1a8cd8] text-white p-2 rounded-md transition-colors"
+                        title="Share this proof on X/Twitter"
+                        data-testid={`share-proof-${proof.id}`}
+                      >
+                        <Twitter size={16} />
+                      </a>
+                    </div>
                   </div>
                 </div>
               ))}
