@@ -63,6 +63,7 @@ class CommentCreate(BaseModel):
     author_name: str
     content: str
     parent_id: Optional[str] = None
+    is_admin: bool = False
 
 class Comment(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -70,6 +71,8 @@ class Comment(BaseModel):
     author_name: str
     content: str
     parent_id: Optional[str] = None
+    is_admin: bool = False
+    likes: int = 0
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     replies: List["Comment"] = []
 
