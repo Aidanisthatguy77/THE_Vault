@@ -1917,6 +1917,7 @@ const AdminPage = () => {
   const tabs = [
     { id: 'games', label: 'Games', icon: Gamepad2 },
     { id: 'clips', label: 'Clips', icon: Video },
+    { id: 'mockups', label: 'Mockups', icon: Layout },
     { id: 'proof', label: 'Proof', icon: Image },
     { id: 'content', label: 'Content', icon: Settings },
     { id: 'comments', label: 'Comments', icon: MessageSquare },
