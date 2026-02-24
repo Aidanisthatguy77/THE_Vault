@@ -425,6 +425,89 @@ const VaultSection = ({ content, games, proofs, mockups }) => {
           </div>
         </div>
 
+        {/* How It Works - Technical Sections */}
+        <div className="grid md:grid-cols-3 gap-6 mb-12">
+          {/* How Licensing Gets Solved */}
+          <div className="bg-black p-6 rounded-md border border-white/10" data-testid="licensing-section">
+            <h3 className="font-heading text-lg font-bold text-white uppercase mb-4">
+              <span className="text-[#C8102E]">How Licensing</span> Gets Solved
+            </h3>
+            <p className="text-white/70 text-sm mb-4">
+              No rebuilding games from scratch. Expired music, jerseys, and player likenesses are handled through modular asset layers inside each container. Swap out what's expired. Keep everything else exactly as it was.
+            </p>
+            <ul className="space-y-2">
+              <li className="flex items-start gap-2 text-white/80 text-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#C8102E] mt-1.5 flex-shrink-0"></span>
+                Expired music replaced with production libraries or custom soundtracks
+              </li>
+              <li className="flex items-start gap-2 text-white/80 text-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#C8102E] mt-1.5 flex-shrink-0"></span>
+                Jersey and court art updated as standalone asset packs
+              </li>
+              <li className="flex items-start gap-2 text-white/80 text-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#C8102E] mt-1.5 flex-shrink-0"></span>
+                Player likenesses handled through neutral overlays or community rosters
+              </li>
+              <li className="flex items-start gap-2 text-white/80 text-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#C8102E] mt-1.5 flex-shrink-0"></span>
+                Zero changes to core gameplay code
+              </li>
+            </ul>
+          </div>
+
+          {/* How It Scales Without Breaking */}
+          <div className="bg-black p-6 rounded-md border border-white/10" data-testid="scaling-section">
+            <h3 className="font-heading text-lg font-bold text-white uppercase mb-4">
+              <span className="text-[#C8102E]">How It Scales</span> Without Breaking
+            </h3>
+            <p className="text-white/70 text-sm mb-4">
+              Kubernetes orchestration means the Vault grows with demand automatically.
+            </p>
+            <ul className="space-y-2">
+              <li className="flex items-start gap-2 text-white/80 text-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#C8102E] mt-1.5 flex-shrink-0"></span>
+                Build once, run anywhere — every session is identical
+              </li>
+              <li className="flex items-start gap-2 text-white/80 text-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#C8102E] mt-1.5 flex-shrink-0"></span>
+                Elastic scaling activates automatically during Throwback events
+              </li>
+              <li className="flex items-start gap-2 text-white/80 text-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#C8102E] mt-1.5 flex-shrink-0"></span>
+                Each title runs in its own isolated container
+              </li>
+              <li className="flex items-start gap-2 text-white/80 text-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#C8102E] mt-1.5 flex-shrink-0"></span>
+                Server cost per session stays minimal through shared infrastructure
+              </li>
+            </ul>
+          </div>
+
+          {/* The Pilot Test */}
+          <div className="bg-black p-6 rounded-md border border-[#C8102E]/50" data-testid="pilot-section">
+            <h3 className="font-heading text-lg font-bold text-white uppercase mb-4">
+              <span className="text-[#C8102E]">The Pilot Test</span> That Proves Everything
+            </h3>
+            <p className="text-white/70 text-sm mb-4">
+              Before full rollout — one 48-hour NBA 2K16 Throwback Weekend. Budget under $750K.
+            </p>
+            <ul className="space-y-2">
+              <li className="flex items-start gap-2 text-white/80 text-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#C8102E] mt-1.5 flex-shrink-0"></span>
+                <span><strong className="text-white">Target:</strong> 15-20% DAU uplift vs baseline</span>
+              </li>
+              <li className="flex items-start gap-2 text-white/80 text-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#C8102E] mt-1.5 flex-shrink-0"></span>
+                <span><strong className="text-white">Metrics:</strong> Session length, VC crossover, Day 2 return rate</span>
+              </li>
+              <li className="flex items-start gap-2 text-white/80 text-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#C8102E] mt-1.5 flex-shrink-0"></span>
+                <span><strong className="text-white">If it hits</strong> — full Legacy Vault gets greenlit.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
         {/* Proof of Demand Gallery */}
         {proofs && proofs.length > 0 && (
           <div className="mb-12">
