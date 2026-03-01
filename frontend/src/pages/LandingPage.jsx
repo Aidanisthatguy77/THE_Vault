@@ -1845,9 +1845,49 @@ const LandingPage = () => {
       <HeroSection content={content} />
       <GamesSection games={games} />
       <VaultSection content={content} games={games} proofs={proofs} mockups={mockups} />
+      
+      {/* NEW: Interactive Demo & Voting Section */}
+      <section className="py-16 bg-[#09090B]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 className="font-heading text-3xl sm:text-4xl font-bold text-white uppercase text-center mb-4">
+            <span className="text-[#C8102E]">Experience</span> The Vision
+          </h2>
+          <p className="text-white/60 text-center mb-12 max-w-2xl mx-auto">
+            See exactly what the Legacy Vault could look like — and vote for your favorite era.
+          </p>
+          
+          <div className="grid lg:grid-cols-2 gap-8">
+            <InteractiveVaultDemo />
+            <div className="space-y-6">
+              <EraVotingPoll />
+              <LiveSocialFeed />
+            </div>
+          </div>
+        </div>
+      </section>
+      
+      {/* NEW: Community Speaks Wall */}
+      <section className="py-16 bg-black">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <CommunitySpeaksWall />
+        </div>
+      </section>
+      
+      {/* NEW: Creator Submission Section */}
+      <section className="py-16 bg-[#09090B]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="max-w-xl mx-auto">
+            <CreatorSubmissionForm />
+          </div>
+        </div>
+      </section>
+      
       <CommunitySection />
       <Footer />
       <MobileBottomNav />
+      
+      {/* Vault AI Chatbot - Always visible */}
+      <VaultChatbot />
     </div>
   );
 };
