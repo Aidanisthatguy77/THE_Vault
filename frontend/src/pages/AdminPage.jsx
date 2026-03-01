@@ -1919,6 +1919,9 @@ const AdminPage = () => {
     { id: 'clips', label: 'Clips', icon: Video },
     { id: 'mockups', label: 'Mockups', icon: Layout },
     { id: 'proof', label: 'Proof', icon: Image },
+    { id: 'community', label: 'Community Wall', icon: Twitter },
+    { id: 'socialfeed', label: 'Live Feed', icon: Rss },
+    { id: 'submissions', label: 'Submissions', icon: UserPlus },
     { id: 'content', label: 'Content', icon: Settings },
     { id: 'comments', label: 'Comments', icon: MessageSquare },
     { id: 'subscribers', label: 'Emails', icon: Mail },
@@ -1960,11 +1963,395 @@ const AdminPage = () => {
         {activeTab === 'clips' && <ClipsManagement />}
         {activeTab === 'mockups' && <MockupsManagement />}
         {activeTab === 'proof' && <ProofManagement />}
+        {activeTab === 'community' && <CommunityPostsManagement />}
+        {activeTab === 'socialfeed' && <SocialFeedManagement />}
+        {activeTab === 'submissions' && <CreatorSubmissionsManagement />}
         {activeTab === 'content' && <ContentManagement />}
         {activeTab === 'comments' && <CommentsManagement />}
         {activeTab === 'subscribers' && <SubscriptionsManagement />}
         {activeTab === 'petition' && <PetitionManagement />}
       </div>
+    </div>
+  );
+};
+
+// Community Posts Management (The Community Speaks Wall)
+const CommunityPostsManagement = () => {
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editPost, setEditPost] = useState(null);
+  const [formData, setFormData] = useState({
+    platform: 'twitter',
+    author_name: '',
+    author_handle: '',
+    author_avatar: '',
+    follower_count: '',
+    content: '',
+    post_url: '',
+    order: 0
+  });
+
+  const fetchPosts = async () => {
+    try {
+      const res = await axios.get(`${API}/community-posts`);
+      setPosts(res.data);
+    } catch (error) {
+      console.error('Error:', error);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchPosts(); }, []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editPost) {
+        await axios.put(`${API}/community-posts/${editPost.id}`, formData);
+        toast.success("Post updated!");
+      } else {
+        await axios.post(`${API}/community-posts`, formData);
+        toast.success("Post added!");
+      }
+      setShowForm(false);
+      setEditPost(null);
+      setFormData({ platform: 'twitter', author_name: '', author_handle: '', author_avatar: '', follower_count: '', content: '', post_url: '', order: 0 });
+      fetchPosts();
+    } catch (error) {
+      toast.error("Failed to save post");
+    }
+  };
+
+  const handleDelete = async (postId) => {
+    if (!window.confirm("Delete this post?")) return;
+    try {
+      await axios.delete(`${API}/community-posts/${postId}`);
+      toast.success("Post deleted!");
+      fetchPosts();
+    } catch (error) {
+      toast.error("Failed to delete post");
+    }
+  };
+
+  const handleEdit = (post) => {
+    setEditPost(post);
+    setFormData({
+      platform: post.platform,
+      author_name: post.author_name,
+      author_handle: post.author_handle,
+      author_avatar: post.author_avatar || '',
+      follower_count: post.follower_count || '',
+      content: post.content,
+      post_url: post.post_url || '',
+      order: post.order || 0
+    });
+    setShowForm(true);
+  };
+
+  if (loading) return <div className="spinner mx-auto mt-8"></div>;
+
+  return (
+    <div data-testid="community-posts-management">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h2 className="font-heading text-2xl font-bold text-white uppercase">Community Wall ({posts.length})</h2>
+          <p className="text-white/60 text-sm">Add tweets, Reddit posts, and YouTube comments to showcase demand</p>
+        </div>
+        <Button onClick={() => { setEditPost(null); setShowForm(true); }} className="btn-primary">
+          <Plus size={18} className="mr-2" /> Add Post
+        </Button>
+      </div>
+
+      {posts.length === 0 ? (
+        <p className="text-white/50 text-center py-8">No community posts yet. Add some social proof!</p>
+      ) : (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {posts.map((post) => (
+            <div key={post.id} className="bg-[#09090B] p-4 rounded-md border border-white/10">
+              <div className="flex justify-between items-start mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-white font-bold text-sm">{post.author_name}</span>
+                  <span className="text-[#C8102E] text-xs">@{post.author_handle}</span>
+                </div>
+                <div className="flex gap-1">
+                  <Button variant="ghost" size="icon" onClick={() => handleEdit(post)} className="h-6 w-6 text-white/60 hover:text-white">
+                    <Pencil size={14} />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleDelete(post.id)} className="h-6 w-6 text-white/60 hover:text-[#C8102E]">
+                    <Trash2 size={14} />
+                  </Button>
+                </div>
+              </div>
+              <p className="text-white/80 text-sm mb-2">{post.content}</p>
+              <div className="flex items-center gap-2 text-white/50 text-xs">
+                <span className="capitalize">{post.platform}</span>
+                {post.follower_count && <span>• {post.follower_count} followers</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Dialog open={showForm} onOpenChange={() => setShowForm(false)}>
+        <DialogContent className="bg-[#09090B] border-white/10 max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-2xl font-bold text-white uppercase">
+              {editPost ? 'Edit Community Post' : 'Add Community Post'}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-white/70 text-sm mb-1 block">Platform</label>
+                <select
+                  value={formData.platform}
+                  onChange={(e) => setFormData({...formData, platform: e.target.value})}
+                  className="w-full bg-black border border-white/20 text-white rounded-md px-3 py-2"
+                >
+                  <option value="twitter">Twitter/X</option>
+                  <option value="reddit">Reddit</option>
+                  <option value="youtube">YouTube</option>
+                  <option value="tiktok">TikTok</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-white/70 text-sm mb-1 block">Follower Count</label>
+                <Input value={formData.follower_count} onChange={(e) => setFormData({...formData, follower_count: e.target.value})} placeholder="e.g. 50K" className="bg-black border-white/20 text-white" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-white/70 text-sm mb-1 block">Author Name *</label>
+                <Input value={formData.author_name} onChange={(e) => setFormData({...formData, author_name: e.target.value})} placeholder="John Doe" className="bg-black border-white/20 text-white" required />
+              </div>
+              <div>
+                <label className="text-white/70 text-sm mb-1 block">Author Handle *</label>
+                <Input value={formData.author_handle} onChange={(e) => setFormData({...formData, author_handle: e.target.value})} placeholder="johndoe" className="bg-black border-white/20 text-white" required />
+              </div>
+            </div>
+            <div>
+              <label className="text-white/70 text-sm mb-1 block">Avatar URL (optional)</label>
+              <Input value={formData.author_avatar} onChange={(e) => setFormData({...formData, author_avatar: e.target.value})} placeholder="https://..." className="bg-black border-white/20 text-white" />
+            </div>
+            <div>
+              <label className="text-white/70 text-sm mb-1 block">Content *</label>
+              <Textarea value={formData.content} onChange={(e) => setFormData({...formData, content: e.target.value})} placeholder="What they said..." className="bg-black border-white/20 text-white min-h-[100px]" required />
+            </div>
+            <div>
+              <label className="text-white/70 text-sm mb-1 block">Original Post URL (optional)</label>
+              <Input value={formData.post_url} onChange={(e) => setFormData({...formData, post_url: e.target.value})} placeholder="https://twitter.com/..." className="bg-black border-white/20 text-white" />
+            </div>
+            <DialogFooter className="pt-4">
+              <Button type="button" variant="outline" onClick={() => setShowForm(false)} className="border-white/20 text-white hover:bg-white/10">Cancel</Button>
+              <Button type="submit" className="btn-primary">{editPost ? 'Update' : 'Add'} Post</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+// Social Feed Management
+const SocialFeedManagement = () => {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({
+    platform: 'twitter',
+    author: '',
+    content: '',
+    url: ''
+  });
+
+  const fetchItems = async () => {
+    try {
+      const res = await axios.get(`${API}/social-feed`);
+      setItems(res.data);
+    } catch (error) {
+      console.error('Error:', error);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchItems(); }, []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${API}/social-feed`, formData);
+      toast.success("Feed item added!");
+      setShowForm(false);
+      setFormData({ platform: 'twitter', author: '', content: '', url: '' });
+      fetchItems();
+    } catch (error) {
+      toast.error("Failed to add item");
+    }
+  };
+
+  const handleDelete = async (itemId) => {
+    if (!window.confirm("Delete this item?")) return;
+    try {
+      await axios.delete(`${API}/social-feed/${itemId}`);
+      toast.success("Item deleted!");
+      fetchItems();
+    } catch (error) {
+      toast.error("Failed to delete item");
+    }
+  };
+
+  if (loading) return <div className="spinner mx-auto mt-8"></div>;
+
+  return (
+    <div data-testid="social-feed-management">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h2 className="font-heading text-2xl font-bold text-white uppercase">Live Feed ({items.length})</h2>
+          <p className="text-white/60 text-sm">Add real-time social posts to the live feed ticker</p>
+        </div>
+        <Button onClick={() => setShowForm(true)} className="btn-primary">
+          <Plus size={18} className="mr-2" /> Add Item
+        </Button>
+      </div>
+
+      {items.length === 0 ? (
+        <p className="text-white/50 text-center py-8">No feed items yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {items.map((item) => (
+            <div key={item.id} className="bg-[#09090B] p-4 rounded-md border border-white/10 flex justify-between items-start">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[#C8102E] text-xs uppercase">{item.platform}</span>
+                  <span className="text-white font-bold text-sm">{item.author}</span>
+                </div>
+                <p className="text-white/80 text-sm">{item.content}</p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => handleDelete(item.id)} className="h-6 w-6 text-white/60 hover:text-[#C8102E]">
+                <Trash2 size={14} />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Dialog open={showForm} onOpenChange={() => setShowForm(false)}>
+        <DialogContent className="bg-[#09090B] border-white/10 max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-2xl font-bold text-white uppercase">Add Feed Item</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-white/70 text-sm mb-1 block">Platform</label>
+                <select
+                  value={formData.platform}
+                  onChange={(e) => setFormData({...formData, platform: e.target.value})}
+                  className="w-full bg-black border border-white/20 text-white rounded-md px-3 py-2"
+                >
+                  <option value="twitter">Twitter/X</option>
+                  <option value="reddit">Reddit</option>
+                  <option value="discord">Discord</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-white/70 text-sm mb-1 block">Author</label>
+                <Input value={formData.author} onChange={(e) => setFormData({...formData, author: e.target.value})} placeholder="@username" className="bg-black border-white/20 text-white" required />
+              </div>
+            </div>
+            <div>
+              <label className="text-white/70 text-sm mb-1 block">Content</label>
+              <Textarea value={formData.content} onChange={(e) => setFormData({...formData, content: e.target.value})} placeholder="What they said..." className="bg-black border-white/20 text-white min-h-[80px]" required />
+            </div>
+            <DialogFooter className="pt-4">
+              <Button type="button" variant="outline" onClick={() => setShowForm(false)} className="border-white/20 text-white hover:bg-white/10">Cancel</Button>
+              <Button type="submit" className="btn-primary">Add Item</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+// Creator Submissions Management
+const CreatorSubmissionsManagement = () => {
+  const [submissions, setSubmissions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchSubmissions = async () => {
+    try {
+      const res = await axios.get(`${API}/creator-submissions`);
+      setSubmissions(res.data);
+    } catch (error) {
+      console.error('Error:', error);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchSubmissions(); }, []);
+
+  const updateStatus = async (id, status) => {
+    try {
+      await axios.put(`${API}/creator-submissions/${id}?status=${status}`);
+      toast.success(`Submission ${status}!`);
+      fetchSubmissions();
+    } catch (error) {
+      toast.error("Failed to update status");
+    }
+  };
+
+  if (loading) return <div className="spinner mx-auto mt-8"></div>;
+
+  const pending = submissions.filter(s => s.status === 'pending');
+  const approved = submissions.filter(s => s.status === 'approved');
+  const rejected = submissions.filter(s => s.status === 'rejected');
+
+  return (
+    <div data-testid="creator-submissions-management">
+      <div className="mb-6">
+        <h2 className="font-heading text-2xl font-bold text-white uppercase">Creator Submissions</h2>
+        <p className="text-white/60 text-sm">Review content submissions from creators</p>
+      </div>
+
+      <div className="flex gap-4 mb-6">
+        <span className="text-white/60">Pending: <span className="text-yellow-500 font-bold">{pending.length}</span></span>
+        <span className="text-white/60">Approved: <span className="text-green-500 font-bold">{approved.length}</span></span>
+        <span className="text-white/60">Rejected: <span className="text-red-500 font-bold">{rejected.length}</span></span>
+      </div>
+
+      {submissions.length === 0 ? (
+        <p className="text-white/50 text-center py-8">No submissions yet.</p>
+      ) : (
+        <div className="space-y-4">
+          {submissions.map((sub) => (
+            <div key={sub.id} className={`bg-[#09090B] p-4 rounded-md border ${sub.status === 'pending' ? 'border-yellow-500/50' : sub.status === 'approved' ? 'border-green-500/50' : 'border-red-500/50'}`}>
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <span className="text-white font-bold">{sub.name}</span>
+                  <span className="text-white/50 text-sm ml-2">({sub.platform})</span>
+                  {sub.follower_count && <span className="text-[#C8102E] text-sm ml-2">{sub.follower_count} followers</span>}
+                </div>
+                <span className={`text-xs px-2 py-1 rounded ${sub.status === 'pending' ? 'bg-yellow-500/20 text-yellow-500' : sub.status === 'approved' ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
+                  {sub.status}
+                </span>
+              </div>
+              <p className="text-white/80 text-sm mb-2">{sub.description}</p>
+              <div className="flex gap-2 text-xs mb-3">
+                <a href={sub.profile_url} target="_blank" rel="noopener noreferrer" className="text-[#C8102E] hover:underline">Profile</a>
+                <a href={sub.content_url} target="_blank" rel="noopener noreferrer" className="text-[#C8102E] hover:underline">Content</a>
+              </div>
+              {sub.status === 'pending' && (
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => updateStatus(sub.id, 'approved')} className="bg-green-600 hover:bg-green-700 text-white text-xs">Approve</Button>
+                  <Button size="sm" variant="outline" onClick={() => updateStatus(sub.id, 'rejected')} className="border-red-500 text-red-500 hover:bg-red-500/10 text-xs">Reject</Button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
