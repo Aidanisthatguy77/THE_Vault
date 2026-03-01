@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { Lock, LogOut, Plus, Pencil, Trash2, Eye, EyeOff, ArrowLeft, Users, Mail, Gamepad2, MessageSquare, Trophy, RefreshCw, UserPlus, Video, Youtube, Play, Settings, Reply, Heart, Image, FileText, ExternalLink, X, Layout } from "lucide-react";
+import { Lock, LogOut, Plus, Pencil, Trash2, Eye, EyeOff, ArrowLeft, Users, Mail, Gamepad2, MessageSquare, Trophy, RefreshCw, UserPlus, Video, Youtube, Play, Settings, Reply, Heart, Image, FileText, ExternalLink, X, Layout, Twitter, MessageCircleMore, Rss } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
