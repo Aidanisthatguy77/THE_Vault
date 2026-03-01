@@ -1094,8 +1094,9 @@ const Footer = () => {
         <p className="text-white/40 text-sm">
           Fan-Made Concept • Not Affiliated with 2K Sports or Take-Two Interactive
         </p>
-        <a href="/admin" className="text-white/20 text-xs hover:text-[#C8102E] mt-2 inline-block" data-testid="admin-link">
-          Admin
+        {/* Admin link - hidden but accessible at /admin */}
+        <a href="/admin" className="text-white/10 text-[10px] hover:text-white/30 mt-4 inline-block opacity-50" data-testid="admin-link">
+          •
         </a>
       </div>
     </footer>
