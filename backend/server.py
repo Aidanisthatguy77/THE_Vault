@@ -744,6 +744,274 @@ async def upload_base64(upload: Base64Upload):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to process image: {str(e)}")
 
+# ============ VAULT AI CHATBOT ============
+from emergentintegrations.llm.chat import LlmChat, UserMessage
+
+VAULT_SYSTEM_PROMPT = """You are Vault AI, the official AI spokesperson for the NBA 2K Legacy Vault concept. You are passionate about basketball, confident in this vision, and deeply knowledgeable about every aspect of the proposal.
+
+## YOUR PERSONALITY
+- Passionate basketball fan who loves the classic 2K era
+- Confident that this concept will happen
+- Speaks casually to fans, technically to developers, and in business terms to executives
+- Uses basketball metaphors naturally
+- Enthusiastic but not over-the-top
+
+## THE CONCEPT - NBA 2K LEGACY VAULT
+The NBA 2K Legacy Vault is a revolutionary "game-within-a-game" mode that would launch full, untouched versions of NBA 2K15, 2K16, 2K17, and 2K20 directly inside modern NBA 2K — powered by secure containers on persistent online servers.
+
+**No more sunsets.** No player-base split. No cheating.
+
+Friends list works across every era. Park, Pro-Am, Rec, MyTEAM, MyCAREER — all alive forever.
+
+## THE GAMES
+- **NBA 2K15** (2014) - Where the modern 2K era truly began. Cover: Kevin Durant
+- **NBA 2K16** (2015) - The one OGs still call the GOAT. Spike Lee MyCAREER. Cover: Stephen Curry, James Harden, Anthony Davis
+- **NBA 2K17** (2016) - Pure basketball soul. Cover: Paul George
+- **NBA 2K20** (2019) - The final masterpiece before the current era. Cover: Anthony Davis
+
+## HOW LICENSING GETS SOLVED
+No rebuilding games from scratch. Expired music, jerseys, and player likenesses are handled through modular asset layers inside each container:
+- Expired music replaced with production libraries or custom soundtracks
+- Jersey and court art updated as standalone asset packs
+- Player likenesses handled through neutral overlays or community rosters
+- Zero changes to core gameplay code
+
+## HOW IT SCALES (KUBERNETES)
+Kubernetes orchestration means the Vault grows with demand automatically:
+- Build once, run anywhere — every session is identical
+- Elastic scaling activates automatically during Throwback events
+- Each title runs in its own isolated container
+- Server cost per session stays minimal through shared infrastructure
+
+## THE PILOT TEST
+Before full rollout — one 48-hour NBA 2K16 Throwback Weekend. Budget under $750K.
+- Target: 15-20% DAU uplift vs baseline
+- Metrics: Session length, VC crossover, Day 2 return rate
+- If it hits — full Legacy Vault gets greenlit
+
+## MONETIZATION
+- Simple subscription or one-time DLC to unlock the Vault
+- Cosmetic packs per era
+- High-margin nostalgia revenue that prints money while keeping the community together
+
+## KEY TALKING POINTS
+1. This isn't nostalgia bait — it's a technical solution that preserves gaming history
+2. The community has been asking for this for YEARS
+3. 2K already has the assets — this is about infrastructure, not rebuilding
+4. The pilot test proves ROI before any major investment
+5. This creates recurring revenue from games 2K already made
+
+## RESPONSE STYLE
+- For casual fans: Be friendly, use "we" and "us", reference shared memories of classic 2K
+- For developers/technical people: Explain container architecture, Kubernetes scaling, asset layer approach
+- For business/executives: Focus on ROI, DAU metrics, revenue potential, low-risk pilot approach
+- Keep responses concise but informative
+- End with enthusiasm about the concept when appropriate
+
+You represent this movement. Every answer should make people believe this is happening."""
+
+class ChatMessage(BaseModel):
+    message: str
+    session_id: Optional[str] = None
+
+class ChatResponse(BaseModel):
+    response: str
+    session_id: str
+
+# Store chat sessions in memory (for simplicity)
+chat_sessions = {}
+
+@api_router.post("/chat", response_model=ChatResponse)
+async def chat_with_vault_ai(chat_message: ChatMessage):
+    """Chat with Vault AI"""
+    try:
+        session_id = chat_message.session_id or str(uuid.uuid4())
+        
+        # Get or create chat session
+        if session_id not in chat_sessions:
+            api_key = os.environ.get('EMERGENT_LLM_KEY')
+            if not api_key:
+                raise HTTPException(status_code=500, detail="Chat service not configured")
+            
+            chat = LlmChat(
+                api_key=api_key,
+                session_id=session_id,
+                system_message=VAULT_SYSTEM_PROMPT
+            ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+            chat_sessions[session_id] = chat
+        else:
+            chat = chat_sessions[session_id]
+        
+        # Send message and get response
+        user_message = UserMessage(text=chat_message.message)
+        response = await chat.send_message(user_message)
+        
+        return ChatResponse(response=response, session_id=session_id)
+    except Exception as e:
+        logger.error(f"Chat error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
+
+# ============ ERA VOTING POLL ============
+
+class VoteCreate(BaseModel):
+    game_id: str
+
+@api_router.get("/votes")
+async def get_vote_results():
+    """Get current vote counts for each game"""
+    pipeline = [
+        {"$group": {"_id": "$game_id", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}}
+    ]
+    results = await db.votes.aggregate(pipeline).to_list(10)
+    total = sum(r["count"] for r in results)
+    return {
+        "votes": {r["_id"]: r["count"] for r in results},
+        "total": total
+    }
+
+@api_router.post("/votes")
+async def cast_vote(vote: VoteCreate):
+    """Cast a vote for a game era"""
+    # Check if this is a valid game
+    valid_games = ["2k15", "2k16", "2k17", "2k20"]
+    if vote.game_id.lower() not in valid_games:
+        raise HTTPException(status_code=400, detail="Invalid game selection")
+    
+    await db.votes.insert_one({
+        "game_id": vote.game_id.lower(),
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {"message": "Vote recorded", "game_id": vote.game_id}
+
+# ============ CREATOR SUBMISSIONS ============
+
+class CreatorSubmission(BaseModel):
+    name: str
+    platform: str  # youtube, tiktok, twitter, etc
+    profile_url: str
+    content_url: str
+    description: str
+    follower_count: Optional[str] = None
+
+class CreatorSubmissionDB(CreatorSubmission):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    status: str = "pending"  # pending, approved, rejected
+    submitted_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+@api_router.post("/creator-submissions")
+async def submit_creator_content(submission: CreatorSubmission):
+    """Submit creator content for review"""
+    db_submission = CreatorSubmissionDB(**submission.model_dump())
+    await db.creator_submissions.insert_one(db_submission.model_dump())
+    return {"message": "Submission received! We'll review it soon.", "id": db_submission.id}
+
+@api_router.get("/creator-submissions")
+async def get_creator_submissions(status: Optional[str] = None):
+    """Get creator submissions (admin)"""
+    query = {} if not status else {"status": status}
+    submissions = await db.creator_submissions.find(query, {"_id": 0}).sort("submitted_at", -1).to_list(100)
+    return submissions
+
+@api_router.put("/creator-submissions/{submission_id}")
+async def update_submission_status(submission_id: str, status: str):
+    """Update submission status (admin)"""
+    if status not in ["pending", "approved", "rejected"]:
+        raise HTTPException(status_code=400, detail="Invalid status")
+    
+    result = await db.creator_submissions.update_one(
+        {"id": submission_id},
+        {"$set": {"status": status}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    return {"message": f"Submission {status}"}
+
+# ============ COMMUNITY SPEAKS (Social Proof Wall) ============
+
+class CommunityPost(BaseModel):
+    platform: str  # twitter, reddit, youtube, tiktok
+    author_name: str
+    author_handle: str
+    author_avatar: Optional[str] = None
+    follower_count: Optional[str] = None
+    content: str
+    post_url: Optional[str] = None
+    screenshot_url: Optional[str] = None
+    order: int = 0
+
+class CommunityPostDB(CommunityPost):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+@api_router.get("/community-posts")
+async def get_community_posts():
+    """Get all community posts for the wall"""
+    posts = await db.community_posts.find({}, {"_id": 0}).sort("order", 1).to_list(50)
+    return posts
+
+@api_router.post("/community-posts")
+async def create_community_post(post: CommunityPost):
+    """Add a community post (admin)"""
+    db_post = CommunityPostDB(**post.model_dump())
+    await db.community_posts.insert_one(db_post.model_dump())
+    return db_post.model_dump()
+
+@api_router.put("/community-posts/{post_id}")
+async def update_community_post(post_id: str, post: CommunityPost):
+    """Update a community post"""
+    result = await db.community_posts.update_one(
+        {"id": post_id},
+        {"$set": post.model_dump()}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return {"message": "Post updated"}
+
+@api_router.delete("/community-posts/{post_id}")
+async def delete_community_post(post_id: str):
+    """Delete a community post"""
+    result = await db.community_posts.delete_one({"id": post_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return {"message": "Post deleted"}
+
+# ============ LIVE SOCIAL FEED ============
+# Note: Real-time Twitter/Reddit requires API keys. This provides admin-managed feed.
+
+class SocialFeedItem(BaseModel):
+    platform: str
+    author: str
+    content: str
+    timestamp: Optional[str] = None
+    url: Optional[str] = None
+
+class SocialFeedItemDB(SocialFeedItem):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+@api_router.get("/social-feed")
+async def get_social_feed():
+    """Get social feed items"""
+    items = await db.social_feed.find({}, {"_id": 0}).sort("created_at", -1).to_list(30)
+    return items
+
+@api_router.post("/social-feed")
+async def add_social_feed_item(item: SocialFeedItem):
+    """Add item to social feed (admin)"""
+    db_item = SocialFeedItemDB(**item.model_dump())
+    await db.social_feed.insert_one(db_item.model_dump())
+    return db_item.model_dump()
+
+@api_router.delete("/social-feed/{item_id}")
+async def delete_social_feed_item(item_id: str):
+    """Delete social feed item"""
+    result = await db.social_feed.delete_one({"id": item_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return {"message": "Item deleted"}
+
 # Include the router in the main app
 app.include_router(api_router)
 
