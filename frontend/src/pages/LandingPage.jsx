@@ -1132,6 +1132,672 @@ const MobileBottomNav = () => {
   );
 };
 
+// ============ VAULT AI CHATBOT ============
+const VaultChatbot = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [messages, setMessages] = useState([
+    { role: 'assistant', content: "Hey! I'm Vault AI — your 24/7 guide to the NBA 2K Legacy Vault concept. Ask me anything about how it works, the games, the tech, or why this needs to happen. Let's talk hoops. 🏀" }
+  ]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const sendMessage = async (e) => {
+    e.preventDefault();
+    if (!input.trim() || loading) return;
+
+    const userMessage = input.trim();
+    setInput('');
+    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    setLoading(true);
+
+    try {
+      const response = await axios.post(`${API}/chat`, {
+        message: userMessage,
+        session_id: sessionId
+      });
+      
+      setSessionId(response.data.session_id);
+      setMessages(prev => [...prev, { role: 'assistant', content: response.data.response }]);
+    } catch (error) {
+      setMessages(prev => [...prev, { role: 'assistant', content: "My bad — hit a technical foul there. Try asking again!" }]);
+    }
+    setLoading(false);
+  };
+
+  const quickQuestions = [
+    "What is the Legacy Vault?",
+    "How does licensing work?",
+    "What's the pilot test?",
+    "Why should 2K do this?"
+  ];
+
+  return (
+    <>
+      {/* Floating Chat Button */}
+      <button
+        onClick={() => setIsOpen(true)}
+        className={`fixed bottom-20 md:bottom-6 right-4 z-50 bg-[#C8102E] hover:bg-[#9e0c24] text-white p-4 rounded-full shadow-lg transition-all ${isOpen ? 'scale-0' : 'scale-100'}`}
+        data-testid="chat-bubble"
+      >
+        <MessageCircle size={24} />
+      </button>
+
+      {/* Chat Window */}
+      {isOpen && (
+        <div className="fixed bottom-20 md:bottom-6 right-4 z-50 w-[calc(100%-2rem)] sm:w-96 h-[500px] bg-[#09090B] rounded-lg border border-[#C8102E]/50 shadow-2xl flex flex-col overflow-hidden" data-testid="chat-window">
+          {/* Header */}
+          <div className="bg-[#C8102E] p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-black rounded-full flex items-center justify-center">
+                <Bot size={20} className="text-[#C8102E]" />
+              </div>
+              <div>
+                <h3 className="font-heading font-bold text-white uppercase">Vault AI</h3>
+                <p className="text-white/70 text-xs">Your Legacy Vault Guide</p>
+              </div>
+            </div>
+            <button onClick={() => setIsOpen(false)} className="text-white/80 hover:text-white">
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {messages.map((msg, idx) => (
+              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[85%] p-3 rounded-lg ${
+                  msg.role === 'user' 
+                    ? 'bg-[#C8102E] text-white' 
+                    : 'bg-black border border-white/10 text-white/90'
+                }`}>
+                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                </div>
+              </div>
+            ))}
+            {loading && (
+              <div className="flex justify-start">
+                <div className="bg-black border border-white/10 p-3 rounded-lg">
+                  <Loader2 className="w-5 h-5 text-[#C8102E] animate-spin" />
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Quick Questions */}
+          {messages.length <= 2 && (
+            <div className="px-4 pb-2 flex flex-wrap gap-2">
+              {quickQuestions.map((q, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setInput(q)}
+                  className="text-xs bg-black border border-white/20 text-white/70 px-3 py-1 rounded-full hover:border-[#C8102E] hover:text-white transition-colors"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Input */}
+          <form onSubmit={sendMessage} className="p-4 border-t border-white/10">
+            <div className="flex gap-2">
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask me anything..."
+                className="flex-1 bg-black border-white/20 text-white text-sm"
+                disabled={loading}
+              />
+              <Button type="submit" className="bg-[#C8102E] hover:bg-[#9e0c24]" disabled={loading}>
+                <Send size={18} />
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
+    </>
+  );
+};
+
+// ============ ERA VOTING POLL ============
+const EraVotingPoll = () => {
+  const [votes, setVotes] = useState({});
+  const [total, setTotal] = useState(0);
+  const [hasVoted, setHasVoted] = useState(false);
+  const [selectedGame, setSelectedGame] = useState(null);
+
+  const games = [
+    { id: '2k15', name: '2K15', year: '2014', color: '#FFD700' },
+    { id: '2k16', name: '2K16', year: '2015', color: '#C8102E' },
+    { id: '2k17', name: '2K17', year: '2016', color: '#1E90FF' },
+    { id: '2k20', name: '2K20', year: '2019', color: '#9400D3' }
+  ];
+
+  useEffect(() => {
+    fetchVotes();
+    // Check if already voted
+    const voted = localStorage.getItem('vault_voted');
+    if (voted) setHasVoted(true);
+  }, []);
+
+  const fetchVotes = async () => {
+    try {
+      const res = await axios.get(`${API}/votes`);
+      setVotes(res.data.votes);
+      setTotal(res.data.total);
+    } catch (error) {
+      console.error('Error fetching votes:', error);
+    }
+  };
+
+  const castVote = async (gameId) => {
+    if (hasVoted) return;
+    
+    setSelectedGame(gameId);
+    try {
+      await axios.post(`${API}/votes`, { game_id: gameId });
+      localStorage.setItem('vault_voted', gameId);
+      setHasVoted(true);
+      fetchVotes();
+      toast.success("Vote recorded! Thanks for making your voice heard.");
+    } catch (error) {
+      toast.error("Couldn't record vote. Try again!");
+    }
+  };
+
+  const getPercentage = (gameId) => {
+    if (total === 0) return 0;
+    return Math.round((votes[gameId] || 0) / total * 100);
+  };
+
+  return (
+    <div className="bg-black p-6 rounded-lg border border-white/10" data-testid="era-voting-poll">
+      <h3 className="font-heading text-xl font-bold text-white uppercase mb-2 text-center">
+        <span className="text-[#C8102E]">Which Era</span> Do You Want Back Most?
+      </h3>
+      <p className="text-white/60 text-sm text-center mb-6">
+        {total.toLocaleString()} votes cast • {hasVoted ? "You voted!" : "Cast your vote below"}
+      </p>
+
+      <div className="space-y-3">
+        {games.map((game) => {
+          const percentage = getPercentage(game.id);
+          const voteCount = votes[game.id] || 0;
+          
+          return (
+            <button
+              key={game.id}
+              onClick={() => castVote(game.id)}
+              disabled={hasVoted}
+              className={`w-full relative overflow-hidden rounded-md border transition-all ${
+                hasVoted 
+                  ? 'border-white/20 cursor-default' 
+                  : 'border-white/20 hover:border-[#C8102E] cursor-pointer'
+              }`}
+            >
+              {/* Progress bar background */}
+              <div 
+                className="absolute inset-0 opacity-30 transition-all duration-500"
+                style={{ 
+                  width: `${percentage}%`,
+                  backgroundColor: game.color
+                }}
+              />
+              
+              {/* Content */}
+              <div className="relative p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="font-heading font-bold text-white uppercase">{game.name}</span>
+                  <span className="text-white/50 text-sm">({game.year})</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-white/70 text-sm">{voteCount.toLocaleString()} votes</span>
+                  <span className="font-bold text-white">{percentage}%</span>
+                  {localStorage.getItem('vault_voted') === game.id && (
+                    <CheckCircle2 size={18} className="text-[#C8102E]" />
+                  )}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// ============ CREATOR SUBMISSION FORM ============
+const CreatorSubmissionForm = () => {
+  const [formData, setFormData] = useState({
+    name: '',
+    platform: 'youtube',
+    profile_url: '',
+    content_url: '',
+    description: '',
+    follower_count: ''
+  });
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${API}/creator-submissions`, formData);
+      setSubmitted(true);
+      toast.success("Submission received! We'll review it soon.");
+    } catch (error) {
+      toast.error("Couldn't submit. Please try again.");
+    }
+  };
+
+  if (submitted) {
+    return (
+      <div className="bg-black p-6 rounded-lg border border-[#C8102E]/50 text-center">
+        <CheckCircle2 className="w-12 h-12 text-[#C8102E] mx-auto mb-3" />
+        <h3 className="font-heading text-xl font-bold text-white uppercase mb-2">Submission Received!</h3>
+        <p className="text-white/70">We'll review your content and feature it if it fits the movement.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-black p-6 rounded-lg border border-white/10" data-testid="creator-submission-form">
+      <h3 className="font-heading text-xl font-bold text-white uppercase mb-2 text-center">
+        <span className="text-[#C8102E]">Submit</span> Your Content
+      </h3>
+      <p className="text-white/60 text-sm text-center mb-6">
+        Are you a creator who made Legacy Vault content? Submit it to be featured!
+      </p>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label className="text-white/70 text-sm mb-1 block">Your Name</label>
+            <Input
+              value={formData.name}
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              placeholder="Creator name"
+              className="bg-[#09090B] border-white/20 text-white"
+              required
+            />
+          </div>
+          <div>
+            <label className="text-white/70 text-sm mb-1 block">Platform</label>
+            <select
+              value={formData.platform}
+              onChange={(e) => setFormData({...formData, platform: e.target.value})}
+              className="w-full bg-[#09090B] border border-white/20 text-white rounded-md px-3 py-2"
+            >
+              <option value="youtube">YouTube</option>
+              <option value="tiktok">TikTok</option>
+              <option value="twitter">Twitter/X</option>
+              <option value="instagram">Instagram</option>
+              <option value="twitch">Twitch</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="text-white/70 text-sm mb-1 block">Your Profile URL</label>
+          <Input
+            value={formData.profile_url}
+            onChange={(e) => setFormData({...formData, profile_url: e.target.value})}
+            placeholder="https://youtube.com/@yourchannel"
+            className="bg-[#09090B] border-white/20 text-white"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="text-white/70 text-sm mb-1 block">Content URL</label>
+          <Input
+            value={formData.content_url}
+            onChange={(e) => setFormData({...formData, content_url: e.target.value})}
+            placeholder="Link to your video/post about Legacy Vault"
+            className="bg-[#09090B] border-white/20 text-white"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="text-white/70 text-sm mb-1 block">Follower Count (optional)</label>
+          <Input
+            value={formData.follower_count}
+            onChange={(e) => setFormData({...formData, follower_count: e.target.value})}
+            placeholder="e.g. 50K"
+            className="bg-[#09090B] border-white/20 text-white"
+          />
+        </div>
+
+        <div>
+          <label className="text-white/70 text-sm mb-1 block">Brief Description</label>
+          <Textarea
+            value={formData.description}
+            onChange={(e) => setFormData({...formData, description: e.target.value})}
+            placeholder="What's your content about?"
+            className="bg-[#09090B] border-white/20 text-white min-h-[80px]"
+            required
+          />
+        </div>
+
+        <Button type="submit" className="w-full btn-primary">
+          Submit for Review
+        </Button>
+      </form>
+    </div>
+  );
+};
+
+// ============ COMMUNITY SPEAKS WALL ============
+const CommunitySpeaksWall = () => {
+  const [posts, setPosts] = useState([]);
+
+  useEffect(() => {
+    const fetchPosts = async () => {
+      try {
+        const res = await axios.get(`${API}/community-posts`);
+        setPosts(res.data);
+      } catch (error) {
+        console.error('Error:', error);
+      }
+    };
+    fetchPosts();
+  }, []);
+
+  const getPlatformIcon = (platform) => {
+    switch (platform) {
+      case 'twitter': return <Twitter size={16} className="text-[#1DA1F2]" />;
+      case 'youtube': return <Youtube size={16} className="text-[#FF0000]" />;
+      case 'reddit': return <span className="text-[#FF4500] font-bold text-sm">R</span>;
+      case 'tiktok': return <Video size={16} className="text-white" />;
+      default: return <MessageCircle size={16} />;
+    }
+  };
+
+  if (posts.length === 0) return null;
+
+  return (
+    <div className="py-12" data-testid="community-speaks-wall">
+      <h2 className="font-heading text-2xl sm:text-3xl font-bold text-white uppercase text-center mb-2">
+        <span className="text-[#C8102E]">The Community</span> Speaks
+      </h2>
+      <p className="text-white/60 text-center mb-8">Real voices demanding the Legacy Vault</p>
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {posts.map((post) => (
+          <div key={post.id} className="bg-black p-5 rounded-lg border border-white/10 hover:border-[#C8102E]/50 transition-colors">
+            <div className="flex items-center gap-3 mb-3">
+              {post.author_avatar ? (
+                <img src={post.author_avatar} alt={post.author_name} className="w-10 h-10 rounded-full" />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-[#C8102E]/20 flex items-center justify-center text-white font-bold">
+                  {post.author_name.charAt(0)}
+                </div>
+              )}
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-white font-bold text-sm">{post.author_name}</span>
+                  {getPlatformIcon(post.platform)}
+                </div>
+                <div className="flex items-center gap-2 text-white/50 text-xs">
+                  <span>@{post.author_handle}</span>
+                  {post.follower_count && <span>• {post.follower_count} followers</span>}
+                </div>
+              </div>
+            </div>
+            <p className="text-white/90 text-sm leading-relaxed">{post.content}</p>
+            {post.post_url && (
+              <a 
+                href={post.post_url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[#C8102E] text-xs mt-3 hover:underline"
+              >
+                View original <ExternalLink size={12} />
+              </a>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ============ INTERACTIVE VAULT DEMO ============
+const InteractiveVaultDemo = () => {
+  const [screen, setScreen] = useState('menu'); // menu, selecting, loading, ingame
+  const [selectedGame, setSelectedGame] = useState(null);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+
+  const games = [
+    { id: '2k15', name: '2K15', year: '2014', color: '#FFD700' },
+    { id: '2k16', name: '2K16', year: '2015', color: '#C8102E' },
+    { id: '2k17', name: '2K17', year: '2016', color: '#1E90FF' },
+    { id: '2k20', name: '2K20', year: '2019', color: '#9400D3' }
+  ];
+
+  const selectGame = (game) => {
+    setSelectedGame(game);
+    setScreen('loading');
+    setLoadingProgress(0);
+    
+    // Simulate loading
+    const interval = setInterval(() => {
+      setLoadingProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setTimeout(() => setScreen('ingame'), 500);
+          return 100;
+        }
+        return prev + Math.random() * 15;
+      });
+    }, 200);
+  };
+
+  const resetDemo = () => {
+    setScreen('menu');
+    setSelectedGame(null);
+    setLoadingProgress(0);
+  };
+
+  return (
+    <div className="bg-black rounded-lg border border-[#C8102E]/50 overflow-hidden" data-testid="interactive-vault-demo">
+      {/* Demo Header */}
+      <div className="bg-[#C8102E] px-4 py-2 flex items-center justify-between">
+        <span className="font-heading text-white text-sm uppercase">Interactive Demo</span>
+        {screen !== 'menu' && (
+          <button onClick={resetDemo} className="text-white/80 hover:text-white text-xs">
+            ← Back to Menu
+          </button>
+        )}
+      </div>
+
+      {/* Demo Screen */}
+      <div className="aspect-video bg-gradient-to-b from-[#1a1a1a] to-black flex items-center justify-center relative overflow-hidden">
+        
+        {/* Main Menu Screen */}
+        {screen === 'menu' && (
+          <div className="text-center p-8 animate-fade-in">
+            <h3 className="font-heading text-2xl sm:text-3xl text-white uppercase mb-2">
+              <span className="text-[#C8102E]">Legacy</span> Vault
+            </h3>
+            <p className="text-white/60 text-sm mb-8">Select an era to enter</p>
+            
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-md mx-auto">
+              {games.map((game) => (
+                <button
+                  key={game.id}
+                  onClick={() => selectGame(game)}
+                  className="group relative bg-black/50 border-2 border-white/20 rounded-lg p-4 hover:border-[#C8102E] transition-all hover:scale-105"
+                >
+                  <div 
+                    className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity rounded-lg"
+                    style={{ backgroundColor: game.color }}
+                  />
+                  <span className="font-heading text-white text-lg uppercase block">{game.name}</span>
+                  <span className="text-white/50 text-xs">{game.year}</span>
+                </button>
+              ))}
+            </div>
+            
+            <p className="text-white/40 text-xs mt-8">Click any era to see the experience</p>
+          </div>
+        )}
+
+        {/* Loading Screen */}
+        {screen === 'loading' && selectedGame && (
+          <div className="text-center p-8 animate-fade-in">
+            <div className="mb-6">
+              <div className="spinner mx-auto mb-4"></div>
+              <h3 className="font-heading text-xl sm:text-2xl text-white uppercase">
+                Entering <span style={{ color: selectedGame.color }}>{selectedGame.name}</span>...
+              </h3>
+            </div>
+            
+            <div className="w-64 mx-auto">
+              <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-[#C8102E] transition-all duration-200 rounded-full"
+                  style={{ width: `${Math.min(loadingProgress, 100)}%` }}
+                />
+              </div>
+              <p className="text-white/50 text-xs mt-2">{Math.min(Math.round(loadingProgress), 100)}%</p>
+            </div>
+            
+            <p className="text-white/40 text-xs mt-6">Loading classic containers...</p>
+          </div>
+        )}
+
+        {/* In-Game Screen */}
+        {screen === 'ingame' && selectedGame && (
+          <div className="w-full h-full flex flex-col animate-fade-in">
+            {/* Fake 2K UI Header */}
+            <div 
+              className="px-4 py-2 flex items-center justify-between"
+              style={{ backgroundColor: selectedGame.color + '40' }}
+            >
+              <span className="font-heading text-white text-sm uppercase">
+                NBA {selectedGame.name} • Legacy Vault
+              </span>
+              <span className="text-white/70 text-xs">MyPLAYER: VaultFan2K</span>
+            </div>
+            
+            {/* Fake Main Menu */}
+            <div className="flex-1 flex items-center justify-center p-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-lg">
+                {['MyCAREER', 'MyPARK', 'MyTEAM', 'Play Now', 'Pro-Am', 'The Rec'].map((mode, idx) => (
+                  <div 
+                    key={mode}
+                    className="bg-black/50 border border-white/20 rounded p-3 text-center hover:border-white/50 cursor-pointer transition-all"
+                    style={{ animationDelay: `${idx * 0.1}s` }}
+                  >
+                    <span className="text-white text-sm font-medium">{mode}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* Bottom Bar */}
+            <div className="bg-black/80 px-4 py-3 text-center">
+              <p className="text-[#C8102E] text-sm font-heading uppercase">
+                🏀 Welcome back to {selectedGame.year}. Servers live forever.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+      
+      <div className="bg-[#09090B] px-4 py-3 text-center border-t border-white/10">
+        <p className="text-white/50 text-xs">
+          This is a concept demo showing what the Legacy Vault menu could look like inside NBA 2K
+        </p>
+      </div>
+    </div>
+  );
+};
+
+// ============ LIVE SOCIAL FEED ============
+const LiveSocialFeed = () => {
+  const [feedItems, setFeedItems] = useState([]);
+
+  useEffect(() => {
+    const fetchFeed = async () => {
+      try {
+        const res = await axios.get(`${API}/social-feed`);
+        setFeedItems(res.data);
+      } catch (error) {
+        console.error('Error:', error);
+      }
+    };
+    fetchFeed();
+    
+    // Poll for new items every 30 seconds
+    const interval = setInterval(fetchFeed, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const getPlatformStyle = (platform) => {
+    switch (platform) {
+      case 'twitter': return { icon: <Twitter size={14} />, color: '#1DA1F2' };
+      case 'reddit': return { icon: <span className="font-bold text-xs">R</span>, color: '#FF4500' };
+      case 'discord': return { icon: <span className="font-bold text-xs">D</span>, color: '#5865F2' };
+      default: return { icon: <MessageCircle size={14} />, color: '#C8102E' };
+    }
+  };
+
+  if (feedItems.length === 0) return null;
+
+  return (
+    <div className="bg-black rounded-lg border border-white/10 overflow-hidden" data-testid="live-social-feed">
+      <div className="bg-[#C8102E] px-4 py-2 flex items-center justify-between">
+        <span className="font-heading text-white text-sm uppercase">Live Feed</span>
+        <span className="flex items-center gap-1 text-white/80 text-xs">
+          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+          Live
+        </span>
+      </div>
+      
+      <div className="max-h-64 overflow-y-auto">
+        {feedItems.map((item, idx) => {
+          const style = getPlatformStyle(item.platform);
+          return (
+            <div 
+              key={item.id || idx} 
+              className="px-4 py-3 border-b border-white/5 hover:bg-white/5 transition-colors"
+            >
+              <div className="flex items-start gap-3">
+                <div 
+                  className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                  style={{ backgroundColor: style.color + '20', color: style.color }}
+                >
+                  {style.icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-white font-medium text-sm">{item.author}</span>
+                    <span className="text-white/40 text-xs">{item.platform}</span>
+                  </div>
+                  <p className="text-white/80 text-sm">{item.content}</p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // Main Landing Page
 const LandingPage = () => {
   const [games, setGames] = useState([]);
