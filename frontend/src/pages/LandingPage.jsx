@@ -1137,11 +1137,12 @@ const MobileBottomNav = () => {
 const VaultChatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: "Hey! I'm Vault AI — your 24/7 guide to the NBA 2K Legacy Vault concept. Ask me anything about how it works, the games, the tech, or why this needs to happen. Let's talk hoops. 🏀" }
+    { role: 'assistant', content: "Hey! I'm Vault AI — your 24/7 guide to the NBA 2K Legacy Vault concept. Ask me anything about how it works, the games, the tech, or why this needs to happen. Let's talk hoops." }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState(null);
+  const [cooldown, setCooldown] = useState(0);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -1152,9 +1153,30 @@ const VaultChatbot = () => {
     scrollToBottom();
   }, [messages]);
 
+  // Cooldown timer
+  useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldown]);
+
+  // Strip markdown formatting (asterisks, bold, etc.)
+  const stripMarkdown = (text) => {
+    return text
+      .replace(/\*\*([^*]+)\*\*/g, '$1')  // **bold** -> bold
+      .replace(/\*([^*]+)\*/g, '$1')       // *italic* -> italic
+      .replace(/__([^_]+)__/g, '$1')       // __bold__ -> bold
+      .replace(/_([^_]+)_/g, '$1')         // _italic_ -> italic
+      .replace(/`([^`]+)`/g, '$1')         // `code` -> code
+      .replace(/#{1,6}\s?/g, '')           // # headers -> remove
+      .replace(/>\s?/g, '')                // > quotes -> remove
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'); // [link](url) -> link
+  };
+
   const sendMessage = async (e) => {
     e.preventDefault();
-    if (!input.trim() || loading) return;
+    if (!input.trim() || loading || cooldown > 0) return;
 
     const userMessage = input.trim();
     setInput('');
@@ -1168,7 +1190,11 @@ const VaultChatbot = () => {
       });
       
       setSessionId(response.data.session_id);
-      setMessages(prev => [...prev, { role: 'assistant', content: response.data.response }]);
+      // Strip markdown from response
+      const cleanResponse = stripMarkdown(response.data.response);
+      setMessages(prev => [...prev, { role: 'assistant', content: cleanResponse }]);
+      // Start 30 second cooldown
+      setCooldown(30);
     } catch (error) {
       setMessages(prev => [...prev, { role: 'assistant', content: "My bad — hit a technical foul there. Try asking again!" }]);
     }
@@ -1236,7 +1262,7 @@ const VaultChatbot = () => {
           </div>
 
           {/* Quick Questions */}
-          {messages.length <= 2 && (
+          {messages.length <= 2 && cooldown === 0 && (
             <div className="px-4 pb-2 flex flex-wrap gap-2">
               {quickQuestions.map((q, idx) => (
                 <button
@@ -1250,20 +1276,29 @@ const VaultChatbot = () => {
             </div>
           )}
 
-          {/* Input */}
+          {/* Input with Cooldown */}
           <form onSubmit={sendMessage} className="p-4 border-t border-white/10">
-            <div className="flex gap-2">
-              <Input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask me anything..."
-                className="flex-1 bg-black border-white/20 text-white text-sm"
-                disabled={loading}
-              />
-              <Button type="submit" className="bg-[#C8102E] hover:bg-[#9e0c24]" disabled={loading}>
-                <Send size={18} />
-              </Button>
-            </div>
+            {cooldown > 0 ? (
+              <div className="text-center">
+                <div className="bg-black border border-white/20 rounded-lg p-3">
+                  <p className="text-white/60 text-sm mb-1">Next message available in</p>
+                  <p className="text-[#C8102E] font-heading text-2xl font-bold">{cooldown}s</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Ask me anything..."
+                  className="flex-1 bg-black border-white/20 text-white text-sm"
+                  disabled={loading}
+                />
+                <Button type="submit" className="bg-[#C8102E] hover:bg-[#9e0c24]" disabled={loading}>
+                  <Send size={18} />
+                </Button>
+              </div>
+            )}
           </form>
         </div>
       )}
