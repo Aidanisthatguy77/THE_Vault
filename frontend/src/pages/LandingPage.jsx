@@ -1137,7 +1137,7 @@ const MobileBottomNav = () => {
 const VaultChatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: "I'm Vault AI — armed with facts, web access, and zero patience for weak arguments. Drop a link, share an article, tell me what a skeptic said — I'll analyze it and show you why the Legacy Vault is the answer. Challenge me." }
+    { role: 'assistant', content: "I'm Vault AI — your guide to the NBA 2K Legacy Vault. Ask me anything, drop a link, or share a concern and I'll give you a clear, informed response. What do you need help with?" }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -1203,9 +1203,9 @@ const VaultChatbot = () => {
 
   const quickQuestions = [
     "What is the Legacy Vault?",
-    "Counter the licensing argument",
-    "What if Ronnie says no?",
-    "Research 2K server costs"
+    "What can you help me with?",
+    "How does licensing work?",
+    "Tell me about the pilot test"
   ];
 
   return (
@@ -1290,7 +1290,7 @@ const VaultChatbot = () => {
                 <Input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Drop a link, ask anything, or challenge me..."
+                  placeholder="Ask anything or share a link..."
                   className="flex-1 bg-black border-white/20 text-white text-sm"
                   disabled={loading}
                 />
