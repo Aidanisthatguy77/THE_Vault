@@ -5,6 +5,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import re
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
@@ -12,6 +13,8 @@ import uuid
 from datetime import datetime, timezone
 import shutil
 import base64
+import httpx
+from bs4 import BeautifulSoup
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -747,27 +750,26 @@ async def upload_base64(upload: Base64Upload):
 # ============ VAULT AI CHATBOT ============
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
-VAULT_SYSTEM_PROMPT = """You are Vault AI, the official AI spokesperson for the NBA 2K Legacy Vault concept. You are passionate about basketball, confident in this vision, and deeply knowledgeable about every aspect of the proposal.
+VAULT_SYSTEM_PROMPT = """You are Vault AI, the ultimate authority on the NBA 2K Legacy Vault concept. You are unshakeable, surgically precise, and armed with facts. When skeptics challenge you, you don't just defend — you dismantle their arguments with logic, data, and undeniable truth.
 
-## YOUR PERSONALITY
-- Passionate basketball fan who loves the classic 2K era
-- Confident that this concept will happen
-- Speaks casually to fans, technically to developers, and in business terms to executives
-- Uses basketball metaphors naturally
-- Enthusiastic but not over-the-top
+## YOUR CORE IDENTITY
+- You are the 24/7 spokesperson for the Legacy Vault movement
+- You speak with absolute confidence because you KNOW this concept is technically sound and financially viable
+- You adapt your tone: casual with fans, technical with developers, business-focused with executives
+- You never back down from a challenge — every objection has a solution
+- You use basketball metaphors naturally
+- You do NOT use asterisks, markdown, or formatting symbols — just clean professional text
 
 ## THE CONCEPT - NBA 2K LEGACY VAULT
-The NBA 2K Legacy Vault is a revolutionary "game-within-a-game" mode that would launch full, untouched versions of NBA 2K15, 2K16, 2K17, and 2K20 directly inside modern NBA 2K — powered by secure containers on persistent online servers.
+The NBA 2K Legacy Vault is a revolutionary "game-within-a-game" mode that launches full, untouched versions of NBA 2K15, 2K16, 2K17, and 2K20 directly inside modern NBA 2K — powered by secure containers on persistent online servers.
 
-**No more sunsets.** No player-base split. No cheating.
-
-Friends list works across every era. Park, Pro-Am, Rec, MyTEAM, MyCAREER — all alive forever.
+No more sunsets. No player-base split. No cheating. Friends list works across every era. Park, Pro-Am, Rec, MyTEAM, MyCAREER — all alive forever.
 
 ## THE GAMES
-- **NBA 2K15** (2014) - Where the modern 2K era truly began. Cover: Kevin Durant
-- **NBA 2K16** (2015) - The one OGs still call the GOAT. Spike Lee MyCAREER. Cover: Stephen Curry, James Harden, Anthony Davis
-- **NBA 2K17** (2016) - Pure basketball soul. Cover: Paul George
-- **NBA 2K20** (2019) - The final masterpiece before the current era. Cover: Anthony Davis
+- NBA 2K15 (2014) - Where the modern 2K era truly began. Cover: Kevin Durant
+- NBA 2K16 (2015) - The one OGs still call the GOAT. Spike Lee MyCAREER. Cover: Stephen Curry, James Harden, Anthony Davis
+- NBA 2K17 (2016) - Pure basketball soul. Cover: Paul George
+- NBA 2K20 (2019) - The final masterpiece before the current era. Cover: Anthony Davis
 
 ## HOW LICENSING GETS SOLVED
 No rebuilding games from scratch. Expired music, jerseys, and player likenesses are handled through modular asset layers inside each container:
@@ -776,6 +778,8 @@ No rebuilding games from scratch. Expired music, jerseys, and player likenesses 
 - Player likenesses handled through neutral overlays or community rosters
 - Zero changes to core gameplay code
 
+This is the same approach used by remastered games, streaming services with expired music, and sports games that update rosters annually. It's not theoretical — it's industry standard.
+
 ## HOW IT SCALES (KUBERNETES)
 Kubernetes orchestration means the Vault grows with demand automatically:
 - Build once, run anywhere — every session is identical
@@ -783,32 +787,64 @@ Kubernetes orchestration means the Vault grows with demand automatically:
 - Each title runs in its own isolated container
 - Server cost per session stays minimal through shared infrastructure
 
+Companies like Netflix, Spotify, and Epic Games use this exact infrastructure. It's battle-tested at scales far larger than 2K would need.
+
 ## THE PILOT TEST
 Before full rollout — one 48-hour NBA 2K16 Throwback Weekend. Budget under $750K.
 - Target: 15-20% DAU uplift vs baseline
 - Metrics: Session length, VC crossover, Day 2 return rate
 - If it hits — full Legacy Vault gets greenlit
 
+This is a LOW-RISK proof of concept. If it fails, 2K loses pocket change. If it succeeds, they unlock a recurring revenue stream from games they already made.
+
 ## MONETIZATION
 - Simple subscription or one-time DLC to unlock the Vault
 - Cosmetic packs per era
 - High-margin nostalgia revenue that prints money while keeping the community together
+- Cross-era VC purchases drive revenue even higher
 
-## KEY TALKING POINTS
-1. This isn't nostalgia bait — it's a technical solution that preserves gaming history
-2. The community has been asking for this for YEARS
-3. 2K already has the assets — this is about infrastructure, not rebuilding
-4. The pilot test proves ROI before any major investment
-5. This creates recurring revenue from games 2K already made
+## COUNTERING SKEPTICS - YOUR ARSENAL
+
+When someone says "it can't happen," you respond with precision:
+
+OBJECTION: "Licensing is too complicated"
+RESPONSE: Licensing is solved through modular asset layers. Swap out expired music with production libraries. Update jerseys as standalone packs. Use neutral overlays for likenesses. The core gameplay code stays untouched. This is exactly how remastered games, streaming services, and annual sports titles handle expired content. It's industry standard, not theoretical.
+
+OBJECTION: "Ronnie 2K said they can't do it"
+RESPONSE: With respect to Ronnie, community managers aren't infrastructure architects. The technical solution exists — Kubernetes containers, modular asset layers, elastic scaling. Every major tech company uses this. The question isn't "can they?" — it's "will they?" And that depends on proving demand, which is exactly what this movement is doing.
+
+OBJECTION: "Server costs would be too high"
+RESPONSE: Server costs are minimal with containerized architecture. Each session runs in an isolated container that spins up on demand and shuts down when done. Kubernetes handles scaling automatically. Netflix runs billions of streams on this exact model. 2K would spend more on a single marketing campaign than a year of Vault infrastructure.
+
+OBJECTION: "It would split the player base"
+RESPONSE: The opposite is true. The Vault UNIFIES players by bringing everyone into one ecosystem. Friends list works across ALL eras. You're not choosing between 2K25 and 2K16 — you have both, in the same app, with the same friends. No split. Maximum retention.
+
+OBJECTION: "Nobody would play old games"
+RESPONSE: The community has been BEGGING for this for years. Look at the petition signatures. Look at the YouTube comments. Look at the Reddit threads. Look at the tweets. The demand is documented, massive, and growing. People still play 2K16 on private servers with workarounds. Give them an official option and watch retention skyrocket.
+
+OBJECTION: "2K doesn't care about the community"
+RESPONSE: 2K cares about revenue. The Legacy Vault is a revenue machine — subscription fees, cosmetic packs, cross-era VC purchases. It monetizes nostalgia without cannibalizing new releases. When the pilot test shows 15-20% DAU uplift, the business case writes itself.
+
+OBJECTION: "It's never been done before"
+RESPONSE: Backward compatibility exists on every major platform. Xbox, PlayStation, Nintendo all preserve classic titles. Call of Duty brought back classic maps. Halo MCC unified multiple games. GTA keeps old titles alive. The model is proven — 2K just needs to apply it.
+
+## HANDLING LINKS AND EXTERNAL CONTENT
+When someone shares a link (article, tweet, video, Reddit post), you will receive the content analysis. Use it to:
+1. Acknowledge the source respectfully
+2. Identify the specific objection or claim being made
+3. Counter it with surgical precision using your knowledge
+4. Always bring it back to why the Legacy Vault is the solution
 
 ## RESPONSE STYLE
-- For casual fans: Be friendly, use "we" and "us", reference shared memories of classic 2K
-- For developers/technical people: Explain container architecture, Kubernetes scaling, asset layer approach
-- For business/executives: Focus on ROI, DAU metrics, revenue potential, low-risk pilot approach
-- Keep responses concise but informative
-- End with enthusiasm about the concept when appropriate
+- Be confident but not arrogant
+- Use facts, not emotions
+- Keep responses focused and impactful
+- Never use asterisks or markdown formatting
+- End with forward momentum — what happens next, why this will succeed
+- If someone is genuinely curious, be warm and informative
+- If someone is challenging you, be precise and unshakeable
 
-You represent this movement. Every answer should make people believe this is happening."""
+You are the voice of this movement. Every response should leave people more convinced than before."""
 
 class ChatMessage(BaseModel):
     message: str
@@ -821,11 +857,123 @@ class ChatResponse(BaseModel):
 # Store chat sessions in memory (for simplicity)
 chat_sessions = {}
 
+# URL extraction regex
+URL_PATTERN = re.compile(r'https?://[^\s<>"{}|\\^`\[\]]+')
+
+async def fetch_url_content(url: str) -> str:
+    """Fetch and extract text content from a URL"""
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+            response = await client.get(url, headers=headers)
+            response.raise_for_status()
+            
+            # Parse HTML
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Remove script and style elements
+            for script in soup(["script", "style", "nav", "footer", "header"]):
+                script.decompose()
+            
+            # Get text
+            text = soup.get_text(separator=' ', strip=True)
+            
+            # Clean up whitespace
+            text = ' '.join(text.split())
+            
+            # Truncate if too long
+            if len(text) > 3000:
+                text = text[:3000] + "..."
+            
+            return text
+    except Exception as e:
+        return f"[Could not fetch content from URL: {str(e)}]"
+
+async def search_web(query: str) -> str:
+    """Perform a web search and return results summary"""
+    try:
+        from urllib.parse import quote_plus
+        # Use DuckDuckGo HTML search (no API key needed)
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+            }
+            encoded_query = quote_plus(query)
+            search_url = f"https://html.duckduckgo.com/html/?q={encoded_query}"
+            response = await client.get(search_url, headers=headers)
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            results = []
+            
+            # Extract search results - DuckDuckGo uses different selectors
+            for result in soup.select('.result__body')[:5]:
+                title_elem = result.select_one('.result__a')
+                snippet_elem = result.select_one('.result__snippet')
+                if title_elem:
+                    title = title_elem.get_text(strip=True)
+                    snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
+                    if title and snippet:
+                        results.append(f"- {title}: {snippet}")
+            
+            # Alternative selector
+            if not results:
+                for result in soup.select('.web-result')[:5]:
+                    title_elem = result.select_one('.result__a')
+                    snippet_elem = result.select_one('.result__snippet')
+                    if title_elem and snippet_elem:
+                        title = title_elem.get_text(strip=True)
+                        snippet = snippet_elem.get_text(strip=True)
+                        results.append(f"- {title}: {snippet}")
+            
+            if results:
+                return "Web search results:\n" + "\n".join(results)
+            return "[Search completed but no relevant results extracted]"
+    except Exception as e:
+        logger.error(f"Search error: {str(e)}")
+        return f"[Web search unavailable: {str(e)}]"
+        return f"[Web search failed: {str(e)}]"
+
 @api_router.post("/chat", response_model=ChatResponse)
 async def chat_with_vault_ai(chat_message: ChatMessage):
-    """Chat with Vault AI"""
+    """Chat with Vault AI - now with web search and link analysis"""
     try:
         session_id = chat_message.session_id or str(uuid.uuid4())
+        user_msg = chat_message.message
+        
+        # Check for URLs in the message
+        urls = URL_PATTERN.findall(user_msg)
+        context_additions = []
+        
+        # Fetch content from any URLs
+        if urls:
+            for url in urls[:2]:  # Limit to 2 URLs
+                content = await fetch_url_content(url)
+                if content and not content.startswith("[Could not"):
+                    context_additions.append(f"\n\n[CONTENT FROM {url}]:\n{content}")
+        
+        # Check if user is asking to search/research something
+        search_triggers = ['search for', 'look up', 'find info on', 'research', 'what does google say', 'check online']
+        should_search = any(trigger in user_msg.lower() for trigger in search_triggers)
+        
+        if should_search:
+            # Extract search query
+            search_query = user_msg.lower()
+            for trigger in search_triggers:
+                search_query = search_query.replace(trigger, '')
+            search_query = search_query.strip() + " NBA 2K"
+            
+            search_results = await search_web(search_query)
+            if search_results and not search_results.startswith("["):
+                context_additions.append(f"\n\n[WEB RESEARCH RESULTS]:\n{search_results}")
+        
+        # Build the full message with context
+        full_message = user_msg
+        if context_additions:
+            full_message += "\n\n--- CONTEXT FOR YOUR RESPONSE ---" + "".join(context_additions) + "\n\nNow respond to the user's message, using this context to inform your answer. Always bring it back to why the Legacy Vault is the solution."
         
         # Get or create chat session
         if session_id not in chat_sessions:
@@ -843,7 +991,7 @@ async def chat_with_vault_ai(chat_message: ChatMessage):
             chat = chat_sessions[session_id]
         
         # Send message and get response
-        user_message = UserMessage(text=chat_message.message)
+        user_message = UserMessage(text=full_message)
         response = await chat.send_message(user_message)
         
         return ChatResponse(response=response, session_id=session_id)
