@@ -860,36 +860,226 @@ chat_sessions = {}
 # URL extraction regex
 URL_PATTERN = re.compile(r'https?://[^\s<>"{}|\\^`\[\]]+')
 
+def identify_platform(url: str) -> str:
+    """Identify which platform a URL is from"""
+    url_lower = url.lower()
+    if 'tiktok.com' in url_lower or 'vm.tiktok.com' in url_lower:
+        return 'tiktok'
+    elif 'twitter.com' in url_lower or 'x.com' in url_lower:
+        return 'twitter'
+    elif 'instagram.com' in url_lower:
+        return 'instagram'
+    elif 'reddit.com' in url_lower or 'redd.it' in url_lower:
+        return 'reddit'
+    elif 'youtube.com' in url_lower or 'youtu.be' in url_lower:
+        return 'youtube'
+    elif 'discord.com' in url_lower or 'discord.gg' in url_lower:
+        return 'discord'
+    else:
+        return 'generic'
+
 async def fetch_url_content(url: str) -> str:
-    """Fetch and extract text content from a URL"""
+    """Fetch and extract content from URLs including social media platforms"""
+    platform = identify_platform(url)
+    
     try:
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
             }
+            
             response = await client.get(url, headers=headers)
             response.raise_for_status()
+            html = response.text
+            soup = BeautifulSoup(html, 'html.parser')
             
-            # Parse HTML
-            soup = BeautifulSoup(response.text, 'html.parser')
+            content_parts = []
+            content_parts.append(f"[PLATFORM: {platform.upper()}]")
+            content_parts.append(f"[URL: {url}]")
             
-            # Remove script and style elements
-            for script in soup(["script", "style", "nav", "footer", "header"]):
-                script.decompose()
+            # Extract title
+            title = soup.find('title')
+            if title:
+                content_parts.append(f"[TITLE: {title.get_text(strip=True)}]")
             
-            # Get text
-            text = soup.get_text(separator=' ', strip=True)
+            # Platform-specific extraction
+            if platform == 'youtube':
+                # YouTube video extraction
+                # Get video title from meta
+                og_title = soup.find('meta', property='og:title')
+                if og_title:
+                    content_parts.append(f"VIDEO TITLE: {og_title.get('content', '')}")
+                
+                # Get description
+                og_desc = soup.find('meta', property='og:description')
+                if og_desc:
+                    content_parts.append(f"DESCRIPTION: {og_desc.get('content', '')}")
+                
+                # Get channel name
+                channel = soup.find('link', itemprop='name')
+                if channel:
+                    content_parts.append(f"CHANNEL: {channel.get('content', '')}")
+                
+                # Try to get transcript/captions info from page
+                scripts = soup.find_all('script')
+                for script in scripts:
+                    if script.string and 'captionTracks' in str(script.string):
+                        content_parts.append("[Video has captions/transcript available]")
+                        break
+                
+                # Extract any visible text content
+                for elem in soup.select('#description, #content, .content'):
+                    text = elem.get_text(separator=' ', strip=True)
+                    if text and len(text) > 50:
+                        content_parts.append(f"CONTENT: {text[:1500]}")
+                        break
+                        
+            elif platform == 'twitter':
+                # Twitter/X extraction
+                # Get tweet content from meta tags
+                og_desc = soup.find('meta', property='og:description')
+                if og_desc:
+                    content_parts.append(f"TWEET: {og_desc.get('content', '')}")
+                
+                og_title = soup.find('meta', property='og:title')
+                if og_title:
+                    content_parts.append(f"AUTHOR: {og_title.get('content', '')}")
+                
+                # Try to get tweet text from various possible locations
+                tweet_text = soup.find('div', {'data-testid': 'tweetText'})
+                if tweet_text:
+                    content_parts.append(f"TWEET TEXT: {tweet_text.get_text(strip=True)}")
+                
+                # Look for article content
+                article = soup.find('article')
+                if article:
+                    text = article.get_text(separator=' ', strip=True)
+                    if len(text) > 50:
+                        content_parts.append(f"FULL CONTENT: {text[:2000]}")
+                        
+            elif platform == 'tiktok':
+                # TikTok extraction
+                og_desc = soup.find('meta', property='og:description')
+                if og_desc:
+                    content_parts.append(f"VIDEO DESCRIPTION: {og_desc.get('content', '')}")
+                
+                og_title = soup.find('meta', property='og:title')
+                if og_title:
+                    content_parts.append(f"TITLE: {og_title.get('content', '')}")
+                
+                # Get creator info
+                creator = soup.find('meta', {'name': 'creator'})
+                if creator:
+                    content_parts.append(f"CREATOR: {creator.get('content', '')}")
+                
+                # Try to get video text/captions from page data
+                scripts = soup.find_all('script')
+                for script in scripts:
+                    if script.string:
+                        script_text = str(script.string)
+                        if 'desc' in script_text.lower() or 'caption' in script_text.lower():
+                            # Extract JSON data if present
+                            import json
+                            try:
+                                if 'SIGI_STATE' in script_text or '__UNIVERSAL_DATA' in script_text:
+                                    # TikTok embeds data in script tags
+                                    content_parts.append("[TikTok video data detected]")
+                            except:
+                                pass
+                
+                # Get any visible text
+                main_content = soup.find('main') or soup.find('div', class_=re.compile('video|content', re.I))
+                if main_content:
+                    text = main_content.get_text(separator=' ', strip=True)
+                    if len(text) > 30:
+                        content_parts.append(f"PAGE CONTENT: {text[:1500]}")
+                        
+            elif platform == 'instagram':
+                # Instagram extraction
+                og_desc = soup.find('meta', property='og:description')
+                if og_desc:
+                    content_parts.append(f"POST: {og_desc.get('content', '')}")
+                
+                og_title = soup.find('meta', property='og:title')
+                if og_title:
+                    content_parts.append(f"TITLE: {og_title.get('content', '')}")
+                
+                # Get any additional meta content
+                for meta in soup.find_all('meta', property=re.compile('og:|twitter:')):
+                    prop = meta.get('property', meta.get('name', ''))
+                    content = meta.get('content', '')
+                    if content and len(content) > 20 and prop not in ['og:url', 'og:type']:
+                        content_parts.append(f"{prop}: {content}")
+                        
+            elif platform == 'reddit':
+                # Reddit extraction - Reddit is more scrape-friendly
+                og_title = soup.find('meta', property='og:title')
+                if og_title:
+                    content_parts.append(f"POST TITLE: {og_title.get('content', '')}")
+                
+                og_desc = soup.find('meta', property='og:description')
+                if og_desc:
+                    content_parts.append(f"CONTENT: {og_desc.get('content', '')}")
+                
+                # Try to get post content
+                post_content = soup.find('div', {'data-test-id': 'post-content'})
+                if post_content:
+                    text = post_content.get_text(separator=' ', strip=True)
+                    content_parts.append(f"POST: {text[:2000]}")
+                
+                # Get comments preview
+                comments = soup.find_all('div', class_=re.compile('comment', re.I))[:3]
+                if comments:
+                    comment_texts = []
+                    for c in comments:
+                        ct = c.get_text(separator=' ', strip=True)[:300]
+                        if ct:
+                            comment_texts.append(ct)
+                    if comment_texts:
+                        content_parts.append(f"TOP COMMENTS: {' | '.join(comment_texts)}")
+                        
+            elif platform == 'discord':
+                # Discord extraction
+                og_desc = soup.find('meta', property='og:description')
+                if og_desc:
+                    content_parts.append(f"CONTENT: {og_desc.get('content', '')}")
+                
+                og_title = soup.find('meta', property='og:title')
+                if og_title:
+                    content_parts.append(f"TITLE: {og_title.get('content', '')}")
             
-            # Clean up whitespace
-            text = ' '.join(text.split())
+            # Generic fallback - get all meaningful text
+            if len(content_parts) <= 3:  # Only have platform, URL, and title
+                # Remove unwanted elements
+                for elem in soup(['script', 'style', 'nav', 'footer', 'header', 'aside']):
+                    elem.decompose()
+                
+                # Get main content
+                main = soup.find('main') or soup.find('article') or soup.find('body')
+                if main:
+                    text = main.get_text(separator=' ', strip=True)
+                    text = ' '.join(text.split())  # Clean whitespace
+                    if len(text) > 100:
+                        content_parts.append(f"PAGE CONTENT: {text[:3000]}")
             
-            # Truncate if too long
-            if len(text) > 3000:
-                text = text[:3000] + "..."
+            # Combine all content
+            full_content = '\n'.join(content_parts)
             
-            return text
+            # Truncate if needed
+            if len(full_content) > 4000:
+                full_content = full_content[:4000] + "..."
+            
+            return full_content
+            
+    except httpx.TimeoutException:
+        return f"[PLATFORM: {platform.upper()}] [URL: {url}] [Content loading timed out - the page took too long to respond. The AI will analyze based on the URL context.]"
     except Exception as e:
-        return f"[Could not fetch content from URL: {str(e)}]"
+        return f"[PLATFORM: {platform.upper()}] [URL: {url}] [Could not fully access content: {str(e)}. The AI will provide analysis based on available context.]"
 
 async def search_web(query: str) -> str:
     """Perform a web search and return results summary"""
@@ -935,11 +1125,10 @@ async def search_web(query: str) -> str:
     except Exception as e:
         logger.error(f"Search error: {str(e)}")
         return f"[Web search unavailable: {str(e)}]"
-        return f"[Web search failed: {str(e)}]"
 
 @api_router.post("/chat", response_model=ChatResponse)
 async def chat_with_vault_ai(chat_message: ChatMessage):
-    """Chat with Vault AI - now with web search and link analysis"""
+    """Chat with Vault AI - with full social media and web access"""
     try:
         session_id = chat_message.session_id or str(uuid.uuid4())
         user_msg = chat_message.message
@@ -948,15 +1137,20 @@ async def chat_with_vault_ai(chat_message: ChatMessage):
         urls = URL_PATTERN.findall(user_msg)
         context_additions = []
         
-        # Fetch content from any URLs
+        # Fetch content from any URLs (support up to 3 links)
         if urls:
-            for url in urls[:2]:  # Limit to 2 URLs
+            context_additions.append("\n\n--- LINK ANALYSIS ---")
+            for url in urls[:3]:
+                platform = identify_platform(url)
+                context_additions.append(f"\n[Analyzing {platform.upper()} link: {url}]")
                 content = await fetch_url_content(url)
-                if content and not content.startswith("[Could not"):
-                    context_additions.append(f"\n\n[CONTENT FROM {url}]:\n{content}")
+                if content:
+                    context_additions.append(content)
+            context_additions.append("\n--- END LINK ANALYSIS ---")
+            context_additions.append("\nAnalyze the content above thoroughly. Break down what's being said or shown, identify any claims, objections, or arguments, and provide a clear, informed response that addresses the specific points. If relevant, explain how the Legacy Vault concept addresses any concerns raised.")
         
         # Check if user is asking to search/research something
-        search_triggers = ['search for', 'look up', 'find info on', 'research', 'what does google say', 'check online']
+        search_triggers = ['search for', 'look up', 'find info on', 'research', 'what does google say', 'check online', 'find out about']
         should_search = any(trigger in user_msg.lower() for trigger in search_triggers)
         
         if should_search:
@@ -968,12 +1162,13 @@ async def chat_with_vault_ai(chat_message: ChatMessage):
             
             search_results = await search_web(search_query)
             if search_results and not search_results.startswith("["):
-                context_additions.append(f"\n\n[WEB RESEARCH RESULTS]:\n{search_results}")
+                context_additions.append(f"\n\n--- WEB RESEARCH ---\n{search_results}\n--- END RESEARCH ---")
+                context_additions.append("\nUse this research to inform your response with factual, up-to-date information.")
         
         # Build the full message with context
         full_message = user_msg
         if context_additions:
-            full_message += "\n\n--- CONTEXT FOR YOUR RESPONSE ---" + "".join(context_additions) + "\n\nNow respond to the user's message, using this context to inform your answer. Always bring it back to why the Legacy Vault is the solution."
+            full_message += "".join(context_additions)
         
         # Get or create chat session
         if session_id not in chat_sessions:
