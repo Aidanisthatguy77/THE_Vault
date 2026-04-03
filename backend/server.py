@@ -1,11 +1,14 @@
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 import re
+import zipfile
+import tempfile
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
@@ -1354,6 +1357,208 @@ async def delete_social_feed_item(item_id: str):
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Item not found")
     return {"message": "Item deleted"}
+
+# ============ NEPLIT - SITE CONTROL & EXPORT ============
+
+class NeplitCommand(BaseModel):
+    command: str
+
+@api_router.post("/neplit/execute")
+async def execute_neplit_command(cmd: NeplitCommand):
+    """Execute a text command to modify site content"""
+    command = cmd.command.lower()
+    result = ""
+    
+    try:
+        # Parse common commands
+        if "headline" in command or "title" in command:
+            # Extract the new value (text after "to" or in quotes)
+            import re
+            match = re.search(r"to ['\"]?([^'\"]+)['\"]?$", command, re.I) or re.search(r"['\"]([^'\"]+)['\"]", command)
+            if match:
+                new_value = match.group(1).strip()
+                if "hero" in command or "main" in command:
+                    await db.site_content.update_one({"key": "hero_headline"}, {"$set": {"value": new_value}}, upsert=True)
+                    result = f"Updated hero headline to: {new_value}"
+                elif "vault" in command:
+                    await db.site_content.update_one({"key": "vault_headline"}, {"$set": {"value": new_value}}, upsert=True)
+                    result = f"Updated vault headline to: {new_value}"
+                else:
+                    await db.site_content.update_one({"key": "hero_headline"}, {"$set": {"value": new_value}}, upsert=True)
+                    result = f"Updated headline to: {new_value}"
+            else:
+                result = "Could not parse the new headline value. Try: Change the hero headline to 'YOUR TEXT'"
+                
+        elif "tagline" in command or "subheadline" in command:
+            match = re.search(r"to ['\"]?([^'\"]+)['\"]?$", command, re.I) or re.search(r"['\"]([^'\"]+)['\"]", command)
+            if match:
+                new_value = match.group(1).strip()
+                await db.site_content.update_one({"key": "hero_tagline"}, {"$set": {"value": new_value}}, upsert=True)
+                result = f"Updated tagline to: {new_value}"
+            else:
+                result = "Could not parse the new tagline. Try: Change the tagline to 'YOUR TEXT'"
+                
+        elif "color" in command:
+            match = re.search(r"#[0-9a-fA-F]{6}", command)
+            if match:
+                result = f"Color change noted: {match.group()}. Note: Color changes require code modification. Use the export feature and modify tailwind.config.js"
+            else:
+                result = "Could not find a valid color code. Use format: #RRGGBB"
+                
+        elif "add" in command and "game" in command:
+            match = re.search(r"add.*game.*[:\-]?\s*(.+)$", command, re.I)
+            if match:
+                game_name = match.group(1).strip()
+                result = f"To add '{game_name}': Go to the Games tab and click 'Add Game' to add it with full details (cover image, year, description)."
+            else:
+                result = "To add a new game, go to the Games tab and click 'Add Game'"
+                
+        elif "petition" in command and ("goal" in command or "target" in command):
+            match = re.search(r"(\d+[,\d]*)", command)
+            if match:
+                goal = match.group(1).replace(",", "")
+                await db.site_content.update_one({"key": "petition_goal"}, {"$set": {"value": goal}}, upsert=True)
+                result = f"Updated petition goal to: {goal}"
+            else:
+                result = "Could not parse the goal number. Try: Set petition goal to 10000"
+        
+        elif "button" in command:
+            match = re.search(r"to ['\"]?([^'\"]+)['\"]?$", command, re.I) or re.search(r"['\"]([^'\"]+)['\"]", command)
+            if match:
+                new_value = match.group(1).strip()
+                if "cta" in command or "hero" in command:
+                    await db.site_content.update_one({"key": "hero_cta_primary"}, {"$set": {"value": new_value}}, upsert=True)
+                    result = f"Updated CTA button to: {new_value}"
+                else:
+                    result = f"Button text noted. Specify which button: hero CTA, petition button, etc."
+            else:
+                result = "Could not parse button text. Try: Change the hero CTA button to 'JOIN THE MOVEMENT'"
+        
+        else:
+            result = """Command not recognized. Try these formats:
+• Change the hero headline to 'YOUR TEXT'
+• Update the tagline to 'YOUR TEXT'  
+• Set petition goal to 10000
+• Change the hero CTA button to 'YOUR TEXT'
+
+For other changes, use the specific tabs (Games, Content, etc.) or export the project and edit directly."""
+        
+        return {"result": result, "success": True}
+        
+    except Exception as e:
+        return {"result": f"Error: {str(e)}", "success": False}
+
+@api_router.get("/neplit/export")
+async def export_standalone_project():
+    """Generate and return a ZIP of the full standalone project"""
+    try:
+        # Create temp directory for the export
+        with tempfile.TemporaryDirectory() as temp_dir:
+            export_dir = Path(temp_dir) / "nba2k-legacy-vault"
+            export_dir.mkdir()
+            
+            # Copy frontend
+            frontend_src = Path("/app/frontend")
+            frontend_dst = export_dir / "frontend"
+            if frontend_src.exists():
+                shutil.copytree(frontend_src, frontend_dst, 
+                    ignore=shutil.ignore_patterns('node_modules', '.git', 'build', '.cache'))
+            
+            # Copy backend
+            backend_src = Path("/app/backend")
+            backend_dst = export_dir / "backend"
+            if backend_src.exists():
+                shutil.copytree(backend_src, backend_dst,
+                    ignore=shutil.ignore_patterns('__pycache__', '.git', 'uploads'))
+                # Create empty uploads directory
+                (backend_dst / "uploads").mkdir(exist_ok=True)
+            
+            # Create README
+            readme_content = """# NBA 2K Legacy Vault - Standalone Project
+
+## Quick Start
+
+### Backend (FastAPI + MongoDB)
+```bash
+cd backend
+pip install -r requirements.txt
+# Update .env with your MongoDB URL and API keys
+uvicorn server:app --reload --port 8001
+```
+
+### Frontend (React)
+```bash
+cd frontend
+npm install  # or yarn install
+# Update .env with your backend URL
+npm start  # or yarn start
+```
+
+## Environment Variables
+
+### Backend (.env)
+```
+MONGO_URL=mongodb://localhost:27017  # or MongoDB Atlas URL
+DB_NAME=nba2k_legacy_vault
+EMERGENT_LLM_KEY=your_claude_api_key  # For Vault AI chatbot
+```
+
+### Frontend (.env)
+```
+REACT_APP_BACKEND_URL=http://localhost:8001  # or your deployed backend URL
+```
+
+## Deployment Options
+
+### Vercel (Frontend)
+1. Push to GitHub
+2. Connect to Vercel
+3. Set REACT_APP_BACKEND_URL environment variable
+
+### Railway/Render (Backend)
+1. Push to GitHub
+2. Connect to Railway or Render
+3. Set environment variables
+4. Deploy
+
+### MongoDB
+- Use MongoDB Atlas (free tier available)
+- Or run locally with Docker: `docker run -d -p 27017:27017 mongo`
+
+## Features
+- Full admin panel at /admin (password: A@070610)
+- Vault AI chatbot with web/link analysis
+- Era voting poll
+- Petition system
+- Comments with likes
+- Email subscriptions
+- And more!
+
+## License
+This project is yours. Do whatever you want with it.
+"""
+            (export_dir / "README.md").write_text(readme_content)
+            
+            # Create the ZIP file
+            zip_path = Path(temp_dir) / "nba2k-legacy-vault.zip"
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for file_path in export_dir.rglob('*'):
+                    if file_path.is_file():
+                        arcname = file_path.relative_to(export_dir)
+                        zipf.write(file_path, arcname)
+            
+            # Copy to a permanent location for download
+            final_zip = Path("/tmp/nba2k-legacy-vault-export.zip")
+            shutil.copy(zip_path, final_zip)
+            
+            return FileResponse(
+                final_zip,
+                media_type="application/zip",
+                filename="nba2k-legacy-vault-standalone.zip"
+            )
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 
 # Include the router in the main app
 app.include_router(api_router)
