@@ -207,6 +207,13 @@ class Mockup(BaseModel):
     order: int = 0
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
+# ============ HEALTH CHECK ============
+
+@api_router.get("/health")
+async def health_check():
+    """Health check endpoint for connectivity status"""
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
+
 # ============ GAME ROUTES ============
 
 @api_router.get("/games", response_model=List[Game])
@@ -992,7 +999,7 @@ async def fetch_url_content(url: str) -> str:
                                 if 'SIGI_STATE' in script_text or '__UNIVERSAL_DATA' in script_text:
                                     # TikTok embeds data in script tags
                                     content_parts.append("[TikTok video data detected]")
-                            except:
+                            except Exception:
                                 pass
                 
                 # Get any visible text
@@ -1358,50 +1365,173 @@ async def delete_social_feed_item(item_id: str):
         raise HTTPException(status_code=404, detail="Item not found")
     return {"message": "Item deleted"}
 
-# ============ NEPLIT - SITE CONTROL & EXPORT ============
+# ============ NEPLIT - ADVANCED SITE CONTROL & EXPORT SYSTEM ============
+
+# Import LLM for AI-powered commands
+try:
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    LLM_AVAILABLE = True
+except ImportError:
+    LLM_AVAILABLE = False
 
 class NeplitCommand(BaseModel):
     command: str
+
+class NeplitPlan(BaseModel):
+    command: str
+    plan: dict
+    confirmed: bool = False
+
+# Neplit Action Log (stored in DB)
+class NeplitLog(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    action_type: str  # "content_change", "export", "doc_fix", "ai_plan"
+    description: str
+    details: dict = {}
+    status: str = "success"  # "success", "failed", "pending"
+    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+@api_router.get("/neplit/logs")
+async def get_neplit_logs():
+    """Get recent Neplit action logs"""
+    logs = await db.neplit_logs.find({}, {"_id": 0}).sort("timestamp", -1).to_list(50)
+    return logs
+
+async def log_neplit_action(action_type: str, description: str, details: dict = {}, status: str = "success"):
+    """Log a Neplit action to the database"""
+    log = NeplitLog(action_type=action_type, description=description, details=details, status=status)
+    await db.neplit_logs.insert_one(log.model_dump())
+    return log
+
+@api_router.post("/neplit/analyze")
+async def analyze_neplit_command(cmd: NeplitCommand):
+    """Use AI to analyze command and generate a structured plan"""
+    command = cmd.command
+    
+    if not LLM_AVAILABLE:
+        return {"error": "LLM integration not available", "fallback": True}
+    
+    try:
+        llm_key = os.environ.get('EMERGENT_LLM_KEY', '')
+        if not llm_key:
+            return {"error": "No LLM key configured", "fallback": True}
+        
+        chat = LlmChat(
+            api_key=llm_key,
+            session_id=f"neplit-{uuid.uuid4()}",
+            system_message="""You are Neplit, an AI assistant that analyzes user commands to modify a website.
+You analyze requests and return a structured JSON plan.
+
+The site has these editable areas:
+- hero_headline, hero_tagline, hero_cta_primary, hero_cta_secondary (Hero section)
+- vault_headline, vault_description, vault_doc_url (Vault section)
+- games_headline, games_description (Games section)  
+- community_headline, community_description (Community section)
+- petition_goal, petition_headline, petition_description (Petition section)
+- footer_text (Footer)
+
+Respond ONLY with valid JSON in this format:
+{
+  "understood": true/false,
+  "summary": "Brief description of what will change",
+  "changes": [
+    {"key": "content_key", "new_value": "new text", "section": "section_name"}
+  ],
+  "requires_code_edit": true/false,
+  "code_edit_note": "If code edit needed, explain what",
+  "risk_level": "low/medium/high",
+  "warnings": ["any warnings"]
+}
+
+If the request is unclear, set understood to false and explain in summary."""
+        ).with_model("gemini", "gemini-2.5-flash")
+        
+        user_msg = UserMessage(text=f"Analyze this command and create a change plan: {command}")
+        response = await chat.send_message(user_msg)
+        
+        # Parse the JSON response
+        import json
+        try:
+            # Clean response - remove markdown code blocks if present
+            clean_response = response.strip()
+            if clean_response.startswith("```"):
+                clean_response = clean_response.split("```")[1]
+                if clean_response.startswith("json"):
+                    clean_response = clean_response[4:]
+            plan = json.loads(clean_response)
+        except Exception:
+            plan = {
+                "understood": True,
+                "summary": response[:200],
+                "changes": [],
+                "requires_code_edit": False,
+                "risk_level": "low",
+                "warnings": []
+            }
+        
+        await log_neplit_action("ai_plan", f"Analyzed: {command[:100]}", {"plan": plan})
+        return {"plan": plan, "raw_response": response}
+        
+    except Exception as e:
+        await log_neplit_action("ai_plan", f"AI analysis failed: {str(e)}", status="failed")
+        return {"error": str(e), "fallback": True}
 
 @api_router.post("/neplit/execute")
 async def execute_neplit_command(cmd: NeplitCommand):
     """Execute a text command to modify site content"""
     command = cmd.command.lower()
     result = ""
+    changes_made = []
     
     try:
-        # Parse common commands
+        # Parse common commands with regex
         if "headline" in command or "title" in command:
-            # Extract the new value (text after "to" or in quotes)
-            import re
             match = re.search(r"to ['\"]?([^'\"]+)['\"]?$", command, re.I) or re.search(r"['\"]([^'\"]+)['\"]", command)
             if match:
                 new_value = match.group(1).strip()
-                if "hero" in command or "main" in command:
-                    await db.site_content.update_one({"key": "hero_headline"}, {"$set": {"value": new_value}}, upsert=True)
-                    result = f"Updated hero headline to: {new_value}"
-                elif "vault" in command:
-                    await db.site_content.update_one({"key": "vault_headline"}, {"$set": {"value": new_value}}, upsert=True)
-                    result = f"Updated vault headline to: {new_value}"
-                else:
-                    await db.site_content.update_one({"key": "hero_headline"}, {"$set": {"value": new_value}}, upsert=True)
-                    result = f"Updated headline to: {new_value}"
+                key = "hero_headline"
+                # Check command context BEFORE extracting value to avoid false matches from value text
+                command_context = command.split("to")[0] if "to" in command else command
+                if "vault" in command_context and "hero" not in command_context:
+                    key = "vault_headline"
+                elif "games" in command_context:
+                    key = "games_headline"
+                elif "community" in command_context:
+                    key = "community_headline"
+                elif "petition" in command_context:
+                    key = "petition_headline"
+                
+                await db.site_content.update_one({"key": key}, {"$set": {"value": new_value}}, upsert=True)
+                result = f"✅ Updated {key.replace('_', ' ')} to: {new_value}"
+                changes_made.append({"key": key, "value": new_value})
             else:
                 result = "Could not parse the new headline value. Try: Change the hero headline to 'YOUR TEXT'"
                 
-        elif "tagline" in command or "subheadline" in command:
+        elif "tagline" in command or "subheadline" in command or "description" in command:
             match = re.search(r"to ['\"]?([^'\"]+)['\"]?$", command, re.I) or re.search(r"['\"]([^'\"]+)['\"]", command)
             if match:
                 new_value = match.group(1).strip()
-                await db.site_content.update_one({"key": "hero_tagline"}, {"$set": {"value": new_value}}, upsert=True)
-                result = f"Updated tagline to: {new_value}"
+                key = "hero_tagline"
+                command_context = command.split("to")[0] if "to" in command else command
+                if "vault" in command_context and "hero" not in command_context:
+                    key = "vault_description"
+                elif "games" in command_context:
+                    key = "games_description"
+                elif "community" in command_context:
+                    key = "community_description"
+                elif "petition" in command_context:
+                    key = "petition_description"
+                
+                await db.site_content.update_one({"key": key}, {"$set": {"value": new_value}}, upsert=True)
+                result = f"✅ Updated {key.replace('_', ' ')} to: {new_value}"
+                changes_made.append({"key": key, "value": new_value})
             else:
-                result = "Could not parse the new tagline. Try: Change the tagline to 'YOUR TEXT'"
+                result = "Could not parse the text. Try: Change the tagline to 'YOUR TEXT'"
                 
         elif "color" in command:
             match = re.search(r"#[0-9a-fA-F]{6}", command)
             if match:
-                result = f"Color change noted: {match.group()}. Note: Color changes require code modification. Use the export feature and modify tailwind.config.js"
+                result = f"⚠️ Color change noted: {match.group()}. Color changes require code modification. Use Export → modify tailwind.config.js"
             else:
                 result = "Could not find a valid color code. Use format: #RRGGBB"
                 
@@ -1409,135 +1539,513 @@ async def execute_neplit_command(cmd: NeplitCommand):
             match = re.search(r"add.*game.*[:\-]?\s*(.+)$", command, re.I)
             if match:
                 game_name = match.group(1).strip()
-                result = f"To add '{game_name}': Go to the Games tab and click 'Add Game' to add it with full details (cover image, year, description)."
+                result = f"📋 To add '{game_name}': Use the Games tab → Add Game button to add with full details."
             else:
-                result = "To add a new game, go to the Games tab and click 'Add Game'"
+                result = "To add a new game, go to Games tab → Add Game"
                 
         elif "petition" in command and ("goal" in command or "target" in command):
             match = re.search(r"(\d+[,\d]*)", command)
             if match:
                 goal = match.group(1).replace(",", "")
                 await db.site_content.update_one({"key": "petition_goal"}, {"$set": {"value": goal}}, upsert=True)
-                result = f"Updated petition goal to: {goal}"
+                result = f"✅ Updated petition goal to: {goal}"
+                changes_made.append({"key": "petition_goal", "value": goal})
             else:
-                result = "Could not parse the goal number. Try: Set petition goal to 10000"
+                result = "Could not parse the goal. Try: Set petition goal to 10000"
         
-        elif "button" in command:
+        elif "button" in command or "cta" in command:
             match = re.search(r"to ['\"]?([^'\"]+)['\"]?$", command, re.I) or re.search(r"['\"]([^'\"]+)['\"]", command)
             if match:
                 new_value = match.group(1).strip()
-                if "cta" in command or "hero" in command:
-                    await db.site_content.update_one({"key": "hero_cta_primary"}, {"$set": {"value": new_value}}, upsert=True)
-                    result = f"Updated CTA button to: {new_value}"
-                else:
-                    result = f"Button text noted. Specify which button: hero CTA, petition button, etc."
+                key = "hero_cta_primary"
+                if "secondary" in command:
+                    key = "hero_cta_secondary"
+                await db.site_content.update_one({"key": key}, {"$set": {"value": new_value}}, upsert=True)
+                result = f"✅ Updated CTA button to: {new_value}"
+                changes_made.append({"key": key, "value": new_value})
             else:
-                result = "Could not parse button text. Try: Change the hero CTA button to 'JOIN THE MOVEMENT'"
+                result = "Could not parse button text. Try: Change the CTA button to 'JOIN NOW'"
+        
+        elif "doc" in command and ("url" in command or "link" in command):
+            match = re.search(r"(https?://[^\s]+)", command)
+            if match:
+                url = match.group(1)
+                await db.site_content.update_one({"key": "vault_doc_url"}, {"$set": {"value": url}}, upsert=True)
+                result = f"✅ Updated vault doc URL to: {url}"
+                changes_made.append({"key": "vault_doc_url", "value": url})
+            else:
+                result = "Could not parse URL. Include a valid https:// link."
         
         else:
-            result = """Command not recognized. Try these formats:
+            result = """📋 Available commands:
 • Change the hero headline to 'YOUR TEXT'
-• Update the tagline to 'YOUR TEXT'  
+• Update the tagline to 'YOUR TEXT'
+• Change the vault headline to 'YOUR TEXT'
 • Set petition goal to 10000
-• Change the hero CTA button to 'YOUR TEXT'
+• Change the CTA button to 'YOUR TEXT'
+• Set doc url to https://...
 
-For other changes, use the specific tabs (Games, Content, etc.) or export the project and edit directly."""
+For complex changes, use the AI Analyzer or specific admin tabs."""
         
-        return {"result": result, "success": True}
+        # Log the action
+        if changes_made:
+            await log_neplit_action("content_change", result, {"changes": changes_made})
+        
+        return {"result": result, "success": bool(changes_made), "changes": changes_made}
         
     except Exception as e:
+        await log_neplit_action("content_change", f"Error: {str(e)}", status="failed")
         return {"result": f"Error: {str(e)}", "success": False}
+
+@api_router.post("/neplit/apply-plan")
+async def apply_neplit_plan(plan: NeplitPlan):
+    """Apply a confirmed AI-generated plan"""
+    if not plan.confirmed:
+        return {"error": "Plan must be confirmed before applying"}
+    
+    changes_applied = []
+    errors = []
+    
+    try:
+        plan_data = plan.plan
+        changes = plan_data.get("changes", [])
+        
+        for change in changes:
+            key = change.get("key")
+            value = change.get("new_value")
+            if key and value:
+                try:
+                    await db.site_content.update_one(
+                        {"key": key}, 
+                        {"$set": {"value": value}}, 
+                        upsert=True
+                    )
+                    changes_applied.append({"key": key, "value": value})
+                except Exception as e:
+                    errors.append({"key": key, "error": str(e)})
+        
+        await log_neplit_action(
+            "ai_plan_applied", 
+            f"Applied {len(changes_applied)} changes from AI plan",
+            {"changes": changes_applied, "errors": errors}
+        )
+        
+        return {
+            "success": len(errors) == 0,
+            "changes_applied": changes_applied,
+            "errors": errors
+        }
+        
+    except Exception as e:
+        await log_neplit_action("ai_plan_applied", f"Failed: {str(e)}", status="failed")
+        return {"error": str(e), "success": False}
+
+# ============ THE DOC - STABILIZATION SYSTEM ============
+
+@api_router.post("/neplit/doc/check")
+async def doc_stability_check():
+    """The Doc: Run stability checks on the current configuration"""
+    issues = []
+    warnings = []
+    
+    try:
+        # Check for required content keys
+        required_keys = ["hero_headline", "hero_tagline", "petition_goal"]
+        for key in required_keys:
+            content = await db.site_content.find_one({"key": key})
+            if not content:
+                issues.append({
+                    "type": "missing_content",
+                    "key": key,
+                    "severity": "medium",
+                    "fix_available": True,
+                    "suggested_fix": f"Create default value for {key}"
+                })
+        
+        # Check for games
+        game_count = await db.games.count_documents({"is_active": True})
+        if game_count == 0:
+            warnings.append({
+                "type": "no_games",
+                "message": "No active games found. The games section will appear empty.",
+                "severity": "low"
+            })
+        
+        # Check for orphaned clips (clips without valid game)
+        all_games = await db.games.find({}, {"id": 1, "_id": 0}).to_list(100)
+        game_ids = [g["id"] for g in all_games]
+        orphaned_clips = await db.clips.count_documents({"game_id": {"$nin": game_ids}})
+        if orphaned_clips > 0:
+            issues.append({
+                "type": "orphaned_clips",
+                "count": orphaned_clips,
+                "severity": "low",
+                "fix_available": True,
+                "suggested_fix": "Remove clips without valid game references"
+            })
+        
+        # Check petition count sanity
+        petition_count = await db.petition_signatures.count_documents({})
+        content = await db.site_content.find_one({"key": "petition_goal"})
+        if content:
+            try:
+                goal = int(content.get("value", "10000"))
+                if petition_count > goal * 10:
+                    warnings.append({
+                        "type": "petition_anomaly",
+                        "message": f"Petition count ({petition_count}) seems unusually high compared to goal ({goal})",
+                        "severity": "medium"
+                    })
+            except Exception:
+                pass
+        
+        await log_neplit_action("doc_check", f"Found {len(issues)} issues, {len(warnings)} warnings")
+        
+        return {
+            "healthy": len(issues) == 0,
+            "issues": issues,
+            "warnings": warnings,
+            "checked_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        return {"error": str(e), "healthy": False}
+
+@api_router.post("/neplit/doc/fix")
+async def doc_apply_fix(fix_type: str, auto: bool = False):
+    """The Doc: Apply a specific fix"""
+    result = {"fixed": False, "message": ""}
+    
+    try:
+        if fix_type == "missing_content":
+            # Create default content values
+            defaults = {
+                "hero_headline": "THE LEGACY VAULT",
+                "hero_tagline": "Revive the Classics. Play Online Forever.",
+                "petition_goal": "10000",
+                "vault_headline": "THE LEGACY VAULT CONCEPT",
+                "vault_description": "A revolutionary platform to preserve NBA 2K history",
+                "games_headline": "THE LEGENDS",
+                "community_headline": "THE COMMUNITY SPEAKS"
+            }
+            for key, value in defaults.items():
+                existing = await db.site_content.find_one({"key": key})
+                if not existing:
+                    await db.site_content.insert_one({"key": key, "value": value})
+            result = {"fixed": True, "message": "Created default content values"}
+            
+        elif fix_type == "orphaned_clips":
+            all_games = await db.games.find({}, {"id": 1, "_id": 0}).to_list(100)
+            game_ids = [g["id"] for g in all_games]
+            delete_result = await db.clips.delete_many({"game_id": {"$nin": game_ids}})
+            result = {"fixed": True, "message": f"Removed {delete_result.deleted_count} orphaned clips"}
+        
+        else:
+            result = {"fixed": False, "message": f"Unknown fix type: {fix_type}"}
+        
+        if result["fixed"]:
+            await log_neplit_action("doc_fix", result["message"], {"fix_type": fix_type})
+        
+        return result
+        
+    except Exception as e:
+        return {"fixed": False, "message": f"Error: {str(e)}"}
+
+# ============ ENHANCED EXPORT WITH GEMINI WIRING ============
 
 @api_router.get("/neplit/export")
 async def export_standalone_project():
-    """Generate and return a ZIP of the full standalone project"""
+    """Generate and return a ZIP of the full standalone project with Gemini AI wiring"""
     try:
+        await log_neplit_action("export", "Starting standalone project export")
+        
         # Create temp directory for the export
         with tempfile.TemporaryDirectory() as temp_dir:
             export_dir = Path(temp_dir) / "nba2k-legacy-vault"
             export_dir.mkdir()
             
-            # Copy frontend
+            # Copy frontend (excluding heavy directories)
             frontend_src = Path("/app/frontend")
             frontend_dst = export_dir / "frontend"
             if frontend_src.exists():
-                shutil.copytree(frontend_src, frontend_dst, 
-                    ignore=shutil.ignore_patterns('node_modules', '.git', 'build', '.cache'))
+                shutil.copytree(
+                    frontend_src, 
+                    frontend_dst, 
+                    ignore=shutil.ignore_patterns(
+                        'node_modules', '.git', 'build', '.cache', 
+                        '*.log', '.DS_Store', 'coverage'
+                    )
+                )
+                
+                # Create .env.example for frontend
+                frontend_env_example = """# Frontend Environment Variables
+REACT_APP_BACKEND_URL=http://localhost:8001
+
+# For production, use your deployed backend URL:
+# REACT_APP_BACKEND_URL=https://your-backend.railway.app
+"""
+                (frontend_dst / ".env.example").write_text(frontend_env_example)
+                # Remove actual .env if it exists
+                env_file = frontend_dst / ".env"
+                if env_file.exists():
+                    env_file.unlink()
             
-            # Copy backend
+            # Copy backend (excluding heavy/sensitive directories)
             backend_src = Path("/app/backend")
             backend_dst = export_dir / "backend"
             if backend_src.exists():
-                shutil.copytree(backend_src, backend_dst,
-                    ignore=shutil.ignore_patterns('__pycache__', '.git', 'uploads'))
+                shutil.copytree(
+                    backend_src, 
+                    backend_dst,
+                    ignore=shutil.ignore_patterns(
+                        '__pycache__', '.git', 'uploads', '*.pyc',
+                        '.pytest_cache', '.venv', 'venv', '*.log'
+                    )
+                )
                 # Create empty uploads directory
                 (backend_dst / "uploads").mkdir(exist_ok=True)
+                
+                # Create .env.example for backend with Gemini config
+                backend_env_example = """# Backend Environment Variables
+
+# MongoDB Connection
+MONGO_URL=mongodb://localhost:27017
+# For MongoDB Atlas: mongodb+srv://username:password@cluster.mongodb.net
+DB_NAME=nba2k_legacy_vault
+
+# CORS (comma-separated origins, or * for all)
+CORS_ORIGINS=http://localhost:3000,https://your-frontend.vercel.app
+
+# AI Chat - Gemini API Key
+# Get yours at: https://makersuite.google.com/app/apikey
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Admin Password (change this!)
+ADMIN_PASSWORD=A@070610
+"""
+                (backend_dst / ".env.example").write_text(backend_env_example)
+                # Remove actual .env
+                env_file = backend_dst / ".env"
+                if env_file.exists():
+                    env_file.unlink()
+                
+                # Create standalone AI chat module for Gemini
+                gemini_chat_code = '''"""
+Standalone Gemini AI Chat Integration
+Replace the Emergent LLM integration with direct Google Gemini API calls.
+"""
+import google.generativeai as genai
+import os
+from typing import Optional
+
+# Configure Gemini
+def get_gemini_client():
+    api_key = os.environ.get('GEMINI_API_KEY')
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY not set in environment")
+    genai.configure(api_key=api_key)
+    return genai.GenerativeModel('gemini-2.0-flash-exp')
+
+async def chat_with_vault_ai(message: str, context: str = "", scrape_result: str = "") -> str:
+    """
+    Send a message to the Vault AI and get a response.
+    
+    Args:
+        message: User's message
+        context: Optional context about the site
+        scrape_result: Optional scraped content from URLs
+    
+    Returns:
+        AI response as plain text
+    """
+    try:
+        model = get_gemini_client()
+        
+        system_prompt = """You are the Vault AI, the official spokesperson for the NBA 2K Legacy Vault initiative.
+
+Your mission: Advocate for bringing back NBA 2K15, 2K16, 2K17, and 2K20 with permanent online servers.
+
+Personality:
+- Passionate about NBA 2K history and legacy
+- Knowledgeable about each game's unique features
+- Persuasive but respectful when addressing skeptics
+- Uses facts and community sentiment as evidence
+
+When given scraped content from links, analyze it and incorporate relevant points into your response.
+
+Keep responses concise (under 200 words) unless detailed analysis is requested.
+Do not use markdown formatting - respond in plain text only."""
+
+        full_prompt = f"{system_prompt}\\n\\n"
+        if context:
+            full_prompt += f"Context: {context}\\n\\n"
+        if scrape_result:
+            full_prompt += f"Analyzed content from link:\\n{scrape_result}\\n\\n"
+        full_prompt += f"User: {message}\\n\\nVault AI:"
+        
+        response = model.generate_content(full_prompt)
+        return response.text.strip()
+        
+    except Exception as e:
+        return f"I apologize, but I encountered an issue: {str(e)}. Please try again."
+
+# Usage in your FastAPI route:
+# from gemini_chat import chat_with_vault_ai
+# response = await chat_with_vault_ai(user_message, context, scraped_content)
+'''
+                (backend_dst / "gemini_chat.py").write_text(gemini_chat_code)
             
-            # Create README
+            # Create comprehensive README
             readme_content = """# NBA 2K Legacy Vault - Standalone Project
 
-## Quick Start
+## 🏀 About
+This is your complete, independent NBA 2K Legacy Vault application. 
+No platform dependencies - deploy it anywhere you want.
 
-### Backend (FastAPI + MongoDB)
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js 18+ (for frontend)
+- Python 3.10+ (for backend)
+- MongoDB (local or Atlas)
+- Gemini API key (free at https://makersuite.google.com/app/apikey)
+
+### Backend Setup
 ```bash
 cd backend
+python -m venv venv
+source venv/bin/activate  # Windows: venv\\Scripts\\activate
 pip install -r requirements.txt
-# Update .env with your MongoDB URL and API keys
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your MongoDB URL and Gemini API key
+
+# Run server
 uvicorn server:app --reload --port 8001
 ```
 
-### Frontend (React)
+### Frontend Setup
 ```bash
 cd frontend
-npm install  # or yarn install
-# Update .env with your backend URL
-npm start  # or yarn start
+npm install  # or: yarn install
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your backend URL
+
+# Run development server
+npm start  # or: yarn start
 ```
 
-## Environment Variables
+## 🔧 Environment Variables
 
 ### Backend (.env)
-```
-MONGO_URL=mongodb://localhost:27017  # or MongoDB Atlas URL
-DB_NAME=nba2k_legacy_vault
-EMERGENT_LLM_KEY=your_claude_api_key  # For Vault AI chatbot
-```
+| Variable | Description | Example |
+|----------|-------------|---------|
+| MONGO_URL | MongoDB connection string | `mongodb://localhost:27017` |
+| DB_NAME | Database name | `nba2k_legacy_vault` |
+| GEMINI_API_KEY | Google Gemini API key | `AIza...` |
+| CORS_ORIGINS | Allowed frontend origins | `http://localhost:3000` |
+| ADMIN_PASSWORD | Admin panel password | `YourSecurePassword123` |
 
 ### Frontend (.env)
-```
-REACT_APP_BACKEND_URL=http://localhost:8001  # or your deployed backend URL
-```
+| Variable | Description | Example |
+|----------|-------------|---------|
+| REACT_APP_BACKEND_URL | Backend API URL | `http://localhost:8001` |
 
-## Deployment Options
+## 📦 Deployment Options
 
-### Vercel (Frontend)
+### Frontend → Vercel (Recommended)
 1. Push to GitHub
-2. Connect to Vercel
-3. Set REACT_APP_BACKEND_URL environment variable
+2. Connect repo to Vercel
+3. Set `REACT_APP_BACKEND_URL` in Vercel environment variables
+4. Deploy!
 
-### Railway/Render (Backend)
+### Backend → Railway
 1. Push to GitHub
-2. Connect to Railway or Render
-3. Set environment variables
-4. Deploy
+2. Create new Railway project
+3. Add MongoDB plugin (or use Atlas)
+4. Set environment variables
+5. Deploy!
 
-### MongoDB
-- Use MongoDB Atlas (free tier available)
-- Or run locally with Docker: `docker run -d -p 27017:27017 mongo`
+### Alternative: Render, Fly.io, DigitalOcean App Platform
 
-## Features
-- Full admin panel at /admin (password: A@070610)
-- Vault AI chatbot with web/link analysis
-- Era voting poll
-- Petition system
-- Comments with likes
-- Email subscriptions
-- And more!
+## 🤖 AI Chat Integration
+The Vault AI chatbot uses Google Gemini. To enable it:
 
-## License
-This project is yours. Do whatever you want with it.
+1. Get a free API key at https://makersuite.google.com/app/apikey
+2. Add to your backend `.env`: `GEMINI_API_KEY=your_key_here`
+3. The `gemini_chat.py` module handles all AI interactions
+
+To switch to a different AI provider, modify `gemini_chat.py`.
+
+## 🔐 Admin Access
+- URL: `/admin`
+- Default password: `A@070610` (CHANGE THIS in .env!)
+
+## 📱 PWA Support
+The app is a Progressive Web App. Users can install it on mobile/desktop.
+The service worker caches assets for offline viewing.
+
+## 🛠 Customization
+
+### Colors
+Edit `frontend/tailwind.config.js`:
+```js
+theme: {
+  extend: {
+    colors: {
+      primary: '#C8102E',  // Change this
+    }
+  }
+}
+```
+
+### Site Content
+All text content is stored in MongoDB and editable via the admin panel.
+Use the Content tab or Neplit commands.
+
+## 📄 License
+This project is yours. Use it however you want.
+Built with ❤️ for the NBA 2K community.
 """
             (export_dir / "README.md").write_text(readme_content)
+            
+            # Create .gitignore
+            gitignore_content = """# Dependencies
+node_modules/
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Environment
+.env
+.env.local
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Uploads
+backend/uploads/*
+!backend/uploads/.gitkeep
+"""
+            (export_dir / ".gitignore").write_text(gitignore_content)
             
             # Create the ZIP file
             zip_path = Path(temp_dir) / "nba2k-legacy-vault.zip"
@@ -1550,6 +2058,8 @@ This project is yours. Do whatever you want with it.
             # Copy to a permanent location for download
             final_zip = Path("/tmp/nba2k-legacy-vault-export.zip")
             shutil.copy(zip_path, final_zip)
+            
+            await log_neplit_action("export", "Export completed successfully", {"size_mb": round(final_zip.stat().st_size / 1024 / 1024, 2)})
             
             return FileResponse(
                 final_zip,

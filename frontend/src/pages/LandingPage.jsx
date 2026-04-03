@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { Menu, X, Home, Gamepad2, Lock, Users, Share2, Trophy, ChevronDown, Heart, FileText, ExternalLink, Twitter, MessageCircle, Send, Bot, Youtube, Video, CheckCircle2, Loader2 } from "lucide-react";
+import { Menu, X, Home, Gamepad2, Lock, Users, Share2, Trophy, ChevronDown, Heart, FileText, ExternalLink, Twitter, MessageCircle, Send, Bot, Youtube, Video, CheckCircle2, Loader2, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,18 @@ Monetization? Simple subscription or one-time DLC to unlock the Vault. Cosmetic 
 // Header Component
 const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const scrollTo = (id) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
@@ -60,6 +72,16 @@ const Header = () => {
             <button onClick={() => scrollTo('games')} className="text-white hover:text-[#C8102E] transition-colors font-medium" data-testid="nav-games">The Games</button>
             <button onClick={() => scrollTo('vault')} className="text-white hover:text-[#C8102E] transition-colors font-medium" data-testid="nav-vault">The Vault</button>
             <button onClick={() => scrollTo('community')} className="text-white hover:text-[#C8102E] transition-colors font-medium" data-testid="nav-community">Community</button>
+            
+            {/* Connectivity Indicator */}
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+              isOnline 
+                ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+            }`} data-testid="connectivity-indicator">
+              {isOnline ? <Wifi size={12} /> : <WifiOff size={12} />}
+              <span className="hidden lg:inline">{isOnline ? 'LIVE' : 'VAULT'}</span>
+            </div>
           </nav>
 
           {/* Mobile Menu Button */}
@@ -81,6 +103,16 @@ const Header = () => {
             <button onClick={() => scrollTo('games')} className="text-white hover:text-[#C8102E] transition-colors font-medium text-left py-2">The Games</button>
             <button onClick={() => scrollTo('vault')} className="text-white hover:text-[#C8102E] transition-colors font-medium text-left py-2">The Vault</button>
             <button onClick={() => scrollTo('community')} className="text-white hover:text-[#C8102E] transition-colors font-medium text-left py-2">Community</button>
+            
+            {/* Mobile Connectivity */}
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium w-fit ${
+              isOnline 
+                ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+            }`}>
+              {isOnline ? <Wifi size={12} /> : <WifiOff size={12} />}
+              <span>{isOnline ? 'LIVE SYNC' : 'VAULT MODE'}</span>
+            </div>
           </nav>
         </div>
       )}
