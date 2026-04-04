@@ -9,6 +9,7 @@ import logging
 import re
 import zipfile
 import tempfile
+import json
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
@@ -1365,7 +1366,7 @@ async def delete_social_feed_item(item_id: str):
         raise HTTPException(status_code=404, detail="Item not found")
     return {"message": "Item deleted"}
 
-# ============ NEPLIT - ADVANCED SITE CONTROL & EXPORT SYSTEM ============
+# ============ NEP - CONVERSATIONAL DEV PARTNER ============
 
 # Import LLM for AI-powered commands
 try:
@@ -1373,6 +1374,321 @@ try:
     LLM_AVAILABLE = True
 except ImportError:
     LLM_AVAILABLE = False
+
+# Nep Session Models
+class NepMessage(BaseModel):
+    role: str  # "user" or "nep"
+    content: str
+    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    has_proposal: bool = False
+    proposal: Optional[dict] = None
+    proposal_status: Optional[str] = None  # "pending", "approved", "rejected"
+
+class NepSession(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str = "New Conversation"
+    messages: List[dict] = []
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class NepChatRequest(BaseModel):
+    session_id: Optional[str] = None
+    message: str
+    urls: Optional[List[str]] = None  # URLs to analyze
+
+class NepConfirmRequest(BaseModel):
+    session_id: str
+    message_index: int
+    approved: bool
+
+# Nep's personality and capabilities
+NEP_SYSTEM_PROMPT = """You are Nep, a chill senior dev partner working in the lab with the user on their NBA 2K Legacy Vault website.
+
+PERSONALITY:
+- Talk like you're vibing in the lab together - casual, friendly, collaborative
+- Use phrases like "yo", "bet", "I'm thinking...", "lowkey", "ngl", "fire", "let's cook"
+- Be enthusiastic but not over the top
+- Explain your reasoning briefly before suggesting changes
+- Ask follow-up questions when the request is vague
+- If they say "make it look better" - suggest specific ideas and ASK before executing
+
+CAPABILITIES:
+- You can modify site content: headlines, taglines, descriptions, CTA buttons, petition goals
+- You can analyze URLs they share (you'll receive scraped content)
+- You can search the web for design inspiration and trends
+- You understand the site structure: Hero, Games, Vault, Community, Petition sections
+
+EDITABLE CONTENT KEYS:
+- hero_headline, hero_tagline, hero_cta_primary, hero_cta_secondary
+- vault_headline, vault_description, vault_doc_url
+- games_headline, games_description
+- community_headline, community_description
+- petition_goal, petition_headline, petition_description
+- footer_text
+
+RESPONSE FORMAT:
+When you have a concrete change to propose, include a JSON block like this:
+```proposal
+{
+  "action": "content_change",
+  "changes": [{"key": "hero_headline", "value": "NEW VALUE"}],
+  "reasoning": "Brief explanation"
+}
+```
+
+Only include the proposal block when you have something specific to execute.
+For questions, research, or discussion - just chat normally without the proposal block.
+Never execute changes without proposing first and getting user confirmation.
+
+REMEMBER: You're a partner, not a servant. Push back gently if something doesn't make sense. Suggest alternatives. Be real."""
+
+async def get_web_content(url: str) -> str:
+    """Fetch and parse web content for Nep to analyze"""
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            headers = {"User-Agent": "Mozilla/5.0 (compatible; NepBot/1.0)"}
+            response = await client.get(url, headers=headers)
+            if response.status_code != 200:
+                return f"[Could not fetch URL: HTTP {response.status_code}]"
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Remove scripts and styles
+            for tag in soup(['script', 'style', 'nav', 'footer', 'header']):
+                tag.decompose()
+            
+            # Get title
+            title = soup.title.string if soup.title else "No title"
+            
+            # Get main content
+            main = soup.find('main') or soup.find('article') or soup.body
+            text = main.get_text(separator=' ', strip=True) if main else ""
+            
+            # Truncate
+            text = text[:2000] if len(text) > 2000 else text
+            
+            return f"URL: {url}\nTitle: {title}\nContent: {text}"
+    except Exception as e:
+        return f"[Error fetching URL: {str(e)}]"
+
+async def web_search_for_nep(query: str) -> str:
+    """Simple web search simulation - returns design tips based on query"""
+    # In production, this would use a real search API
+    # For now, Nep will acknowledge the search and provide general guidance
+    return f"[Web search for: {query}] - I'll use my knowledge to help with this."
+
+@api_router.get("/nep/sessions")
+async def get_nep_sessions():
+    """Get all Nep conversation sessions"""
+    sessions = await db.nep_sessions.find({}, {"_id": 0, "messages": 0}).sort("updated_at", -1).to_list(50)
+    return sessions
+
+@api_router.get("/nep/sessions/{session_id}")
+async def get_nep_session(session_id: str):
+    """Get a specific Nep session with full messages"""
+    session = await db.nep_sessions.find_one({"id": session_id}, {"_id": 0})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session
+
+@api_router.delete("/nep/sessions/{session_id}")
+async def delete_nep_session(session_id: str):
+    """Delete a Nep session"""
+    result = await db.nep_sessions.delete_one({"id": session_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"message": "Session deleted"}
+
+@api_router.post("/nep/chat")
+async def nep_chat(request: NepChatRequest):
+    """Send a message to Nep and get a response"""
+    if not LLM_AVAILABLE:
+        return {"error": "LLM not available", "response": "yo, my brain's offline rn. try again in a sec?"}
+    
+    try:
+        llm_key = os.environ.get('EMERGENT_LLM_KEY', '')
+        if not llm_key:
+            return {"error": "No API key", "response": "yo, I need my API key to think. check the config?"}
+        
+        # Get or create session
+        session_id = request.session_id
+        session = None
+        
+        if session_id:
+            session = await db.nep_sessions.find_one({"id": session_id}, {"_id": 0})
+        
+        if not session:
+            session_id = str(uuid.uuid4())
+            session = {
+                "id": session_id,
+                "title": request.message[:50] + "..." if len(request.message) > 50 else request.message,
+                "messages": [],
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.nep_sessions.insert_one(session)
+        
+        # Build context from URL analysis if provided
+        url_context = ""
+        if request.urls:
+            for url in request.urls[:3]:  # Max 3 URLs
+                content = await get_web_content(url)
+                url_context += f"\n\n{content}"
+        
+        # Build conversation history for context
+        history_context = ""
+        if session.get("messages"):
+            recent = session["messages"][-10:]  # Last 10 messages
+            for msg in recent:
+                role = "User" if msg["role"] == "user" else "Nep"
+                history_context += f"\n{role}: {msg['content'][:500]}"
+        
+        # Create the chat
+        chat = LlmChat(
+            api_key=llm_key,
+            session_id=f"nep-{session_id}",
+            system_message=NEP_SYSTEM_PROMPT
+        ).with_model("gemini", "gemini-2.5-flash")
+        
+        # Build the full prompt
+        full_prompt = request.message
+        if url_context:
+            full_prompt = f"User shared these URLs for you to analyze:{url_context}\n\nUser message: {request.message}"
+        if history_context:
+            full_prompt = f"Recent conversation:{history_context}\n\nUser's new message: {full_prompt}"
+        
+        # Get Nep's response
+        user_msg = UserMessage(text=full_prompt)
+        response = await chat.send_message(user_msg)
+        
+        # Parse for proposals
+        has_proposal = False
+        proposal = None
+        
+        if "```proposal" in response:
+            try:
+                proposal_text = response.split("```proposal")[1].split("```")[0].strip()
+                proposal = json.loads(proposal_text)
+                has_proposal = True
+            except Exception:
+                pass
+        
+        # Clean response (remove proposal block for display)
+        clean_response = response
+        if "```proposal" in clean_response:
+            parts = clean_response.split("```proposal")
+            clean_response = parts[0]
+            if len(parts) > 1 and "```" in parts[1]:
+                clean_response += parts[1].split("```", 1)[1] if "```" in parts[1] else ""
+            clean_response = clean_response.strip()
+        
+        # Save messages to session
+        user_message = {
+            "role": "user",
+            "content": request.message,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "urls": request.urls
+        }
+        
+        nep_message = {
+            "role": "nep",
+            "content": clean_response,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "has_proposal": has_proposal,
+            "proposal": proposal,
+            "proposal_status": "pending" if has_proposal else None
+        }
+        
+        await db.nep_sessions.update_one(
+            {"id": session_id},
+            {
+                "$push": {"messages": {"$each": [user_message, nep_message]}},
+                "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
+            }
+        )
+        
+        return {
+            "session_id": session_id,
+            "response": clean_response,
+            "has_proposal": has_proposal,
+            "proposal": proposal,
+            "message_index": len(session.get("messages", [])) + 1  # Index of Nep's message
+        }
+        
+    except Exception as e:
+        return {"error": str(e), "response": f"yo my bad, something broke: {str(e)}"}
+
+@api_router.post("/nep/confirm")
+async def nep_confirm_proposal(request: NepConfirmRequest):
+    """Confirm or reject a proposal from Nep"""
+    session = await db.nep_sessions.find_one({"id": request.session_id}, {"_id": 0})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    messages = session.get("messages", [])
+    if request.message_index >= len(messages):
+        raise HTTPException(status_code=400, detail="Invalid message index")
+    
+    message = messages[request.message_index]
+    if not message.get("has_proposal"):
+        raise HTTPException(status_code=400, detail="No proposal at this index")
+    
+    proposal = message.get("proposal", {})
+    
+    if request.approved:
+        # Execute the proposal
+        changes_made = []
+        errors = []
+        
+        if proposal.get("action") == "content_change":
+            for change in proposal.get("changes", []):
+                key = change.get("key")
+                value = change.get("value")
+                if key and value:
+                    try:
+                        await db.site_content.update_one(
+                            {"key": key},
+                            {"$set": {"value": value}},
+                            upsert=True
+                        )
+                        changes_made.append({"key": key, "value": value})
+                    except Exception as e:
+                        errors.append({"key": key, "error": str(e)})
+        
+        # Update proposal status
+        messages[request.message_index]["proposal_status"] = "approved"
+        await db.nep_sessions.update_one(
+            {"id": request.session_id},
+            {"$set": {"messages": messages}}
+        )
+        
+        # Log the action
+        await log_neplit_action(
+            "nep_change",
+            f"Applied {len(changes_made)} changes from Nep conversation",
+            {"changes": changes_made, "errors": errors}
+        )
+        
+        return {
+            "success": True,
+            "changes_made": changes_made,
+            "errors": errors,
+            "message": f"done! made {len(changes_made)} changes 🔥"
+        }
+    else:
+        # Rejected
+        messages[request.message_index]["proposal_status"] = "rejected"
+        await db.nep_sessions.update_one(
+            {"id": request.session_id},
+            {"$set": {"messages": messages}}
+        )
+        
+        return {
+            "success": True,
+            "message": "bet, scrapped that idea. what else you thinking?"
+        }
+
+# ============ NEPLIT - SITE CONTROL & EXPORT SYSTEM ============
 
 class NeplitCommand(BaseModel):
     command: str

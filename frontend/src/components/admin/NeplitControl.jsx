@@ -1,11 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { 
-  Package, Download, Wand2, RefreshCw, Shield, FileText, 
-  CheckCircle, XCircle, AlertTriangle, Clock, Zap, 
-  ChevronDown, ChevronUp, Wifi, WifiOff, Activity
+  Package, Download, RefreshCw, Shield, FileText, 
+  CheckCircle, XCircle, AlertTriangle, Clock, 
+  ChevronDown, ChevronUp, Wifi, WifiOff, Activity,
+  Send, MessageSquare, Plus, Trash2, ExternalLink,
+  Check, X, Sparkles, History, Search, Link2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
@@ -36,41 +39,503 @@ const ConnectivityIndicator = ({ isOnline, isApiConnected }) => {
   );
 };
 
-// Action Log Item
-const LogItem = ({ log }) => {
-  const getIcon = () => {
-    switch (log.action_type) {
-      case 'content_change': return <FileText size={14} className="text-blue-400" />;
-      case 'export': return <Download size={14} className="text-green-400" />;
-      case 'doc_fix': return <Shield size={14} className="text-purple-400" />;
-      case 'ai_plan': return <Zap size={14} className="text-yellow-400" />;
-      default: return <Activity size={14} className="text-white/50" />;
-    }
-  };
-
-  const getStatusColor = () => {
-    switch (log.status) {
-      case 'success': return 'text-green-400';
-      case 'failed': return 'text-red-400';
-      default: return 'text-yellow-400';
-    }
-  };
-
+// Chat Message Component
+const ChatMessage = ({ message, onConfirm, onReject }) => {
+  const isNep = message.role === 'nep';
+  
   return (
-    <div className="flex items-start gap-3 p-3 bg-black/50 rounded border border-white/5 text-sm">
-      <div className="mt-0.5">{getIcon()}</div>
-      <div className="flex-1 min-w-0">
-        <p className="text-white/80 truncate">{log.description}</p>
-        <p className="text-white/40 text-xs mt-1">
-          {new Date(log.timestamp).toLocaleString()}
+    <div className={`flex gap-3 ${isNep ? '' : 'flex-row-reverse'}`}>
+      {/* Avatar */}
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+        isNep ? 'bg-gradient-to-br from-[#C8102E] to-[#8B0000]' : 'bg-white/10'
+      }`}>
+        {isNep ? (
+          <Sparkles size={16} className="text-white" />
+        ) : (
+          <span className="text-white/70 text-xs font-bold">YOU</span>
+        )}
+      </div>
+      
+      {/* Message Content */}
+      <div className={`flex-1 max-w-[80%] ${isNep ? '' : 'text-right'}`}>
+        <div className={`inline-block p-4 rounded-2xl ${
+          isNep 
+            ? 'bg-[#1a1a1a] border border-white/10 text-left' 
+            : 'bg-[#C8102E]/20 border border-[#C8102E]/30'
+        }`}>
+          <p className="text-white/90 text-sm whitespace-pre-wrap">{message.content}</p>
+          
+          {/* URL tags if present */}
+          {message.urls && message.urls.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {message.urls.map((url, idx) => (
+                <a 
+                  key={idx}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs bg-white/5 px-2 py-0.5 rounded text-[#C8102E] hover:bg-white/10 flex items-center gap-1"
+                >
+                  <Link2 size={10} /> {new URL(url).hostname}
+                </a>
+              ))}
+            </div>
+          )}
+          
+          {/* Proposal Card */}
+          {message.has_proposal && message.proposal && (
+            <div className="mt-3 p-3 bg-black/50 rounded-lg border border-yellow-500/30">
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles size={14} className="text-yellow-400" />
+                <span className="text-yellow-400 text-xs font-medium uppercase">Proposed Change</span>
+              </div>
+              
+              {message.proposal.changes?.map((change, idx) => (
+                <div key={idx} className="text-xs text-white/70 mb-1">
+                  <span className="text-white/50">{change.key}:</span>{' '}
+                  <span className="text-white/90">"{change.value}"</span>
+                </div>
+              ))}
+              
+              {message.proposal.reasoning && (
+                <p className="text-white/50 text-xs mt-2 italic">{message.proposal.reasoning}</p>
+              )}
+              
+              {/* Action Buttons */}
+              {message.proposal_status === 'pending' && (
+                <div className="flex gap-2 mt-3">
+                  <Button 
+                    size="sm" 
+                    onClick={onConfirm}
+                    className="bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 text-xs"
+                  >
+                    <Check size={14} className="mr-1" /> Let's do it
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    onClick={onReject}
+                    variant="outline"
+                    className="border-white/20 text-white/60 hover:bg-white/5 text-xs"
+                  >
+                    <X size={14} className="mr-1" /> Nah, try something else
+                  </Button>
+                </div>
+              )}
+              
+              {message.proposal_status === 'approved' && (
+                <div className="flex items-center gap-2 mt-3 text-green-400 text-xs">
+                  <CheckCircle size={14} /> Applied
+                </div>
+              )}
+              
+              {message.proposal_status === 'rejected' && (
+                <div className="flex items-center gap-2 mt-3 text-white/40 text-xs">
+                  <XCircle size={14} /> Skipped
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        
+        <p className="text-white/30 text-xs mt-1">
+          {new Date(message.timestamp).toLocaleTimeString()}
         </p>
       </div>
-      <span className={`text-xs uppercase ${getStatusColor()}`}>{log.status}</span>
     </div>
   );
 };
 
-// The Doc Panel
+// Session List Sidebar
+const SessionSidebar = ({ sessions, activeSessionId, onSelectSession, onNewSession, onDeleteSession }) => {
+  return (
+    <div className="w-64 bg-[#0a0a0a] border-r border-white/10 flex flex-col h-full">
+      <div className="p-4 border-b border-white/10">
+        <Button 
+          onClick={onNewSession}
+          className="w-full bg-[#C8102E] hover:bg-[#9e0c24] text-white"
+        >
+          <Plus size={16} className="mr-2" /> New Chat
+        </Button>
+      </div>
+      
+      <div className="flex-1 overflow-y-auto p-2">
+        <div className="flex items-center gap-2 px-3 py-2 text-white/40 text-xs uppercase">
+          <History size={12} /> History
+        </div>
+        
+        {sessions.length === 0 ? (
+          <p className="text-white/30 text-xs text-center py-4">No conversations yet</p>
+        ) : (
+          <div className="space-y-1">
+            {sessions.map((session) => (
+              <div
+                key={session.id}
+                className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
+                  activeSessionId === session.id 
+                    ? 'bg-[#C8102E]/20 border border-[#C8102E]/30' 
+                    : 'hover:bg-white/5'
+                }`}
+                onClick={() => onSelectSession(session.id)}
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-white/80 text-sm truncate">{session.title}</p>
+                  <p className="text-white/30 text-xs">
+                    {new Date(session.updated_at).toLocaleDateString()}
+                  </p>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDeleteSession(session.id); }}
+                  className="opacity-0 group-hover:opacity-100 text-white/40 hover:text-red-400 p-1"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Nep Chat Interface
+const NepChat = ({ onAction }) => {
+  const [sessions, setSessions] = useState([]);
+  const [activeSessionId, setActiveSessionId] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [urlInput, setUrlInput] = useState('');
+  const [urls, setUrls] = useState([]);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(true);
+  const messagesEndRef = useRef(null);
+
+  // Fetch sessions
+  const fetchSessions = async () => {
+    try {
+      const res = await axios.get(`${API}/nep/sessions`);
+      setSessions(res.data);
+    } catch (error) {
+      console.error('Failed to fetch sessions');
+    }
+  };
+
+  // Load session messages
+  const loadSession = async (sessionId) => {
+    if (!sessionId) {
+      setMessages([]);
+      setActiveSessionId(null);
+      return;
+    }
+    
+    try {
+      const res = await axios.get(`${API}/nep/sessions/${sessionId}`);
+      setMessages(res.data.messages || []);
+      setActiveSessionId(sessionId);
+    } catch (error) {
+      toast.error('Failed to load conversation');
+    }
+  };
+
+  // Delete session
+  const deleteSession = async (sessionId) => {
+    if (!window.confirm('Delete this conversation?')) return;
+    
+    try {
+      await axios.delete(`${API}/nep/sessions/${sessionId}`);
+      toast.success('Conversation deleted');
+      fetchSessions();
+      if (activeSessionId === sessionId) {
+        setActiveSessionId(null);
+        setMessages([]);
+      }
+    } catch (error) {
+      toast.error('Failed to delete');
+    }
+  };
+
+  // Start new chat
+  const startNewChat = () => {
+    setActiveSessionId(null);
+    setMessages([]);
+    setInput('');
+    setUrls([]);
+  };
+
+  // Send message
+  const sendMessage = async () => {
+    if (!input.trim() && urls.length === 0) return;
+    
+    const userMessage = {
+      role: 'user',
+      content: input,
+      timestamp: new Date().toISOString(),
+      urls: urls.length > 0 ? urls : undefined
+    };
+    
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    setUrls([]);
+    setShowUrlInput(false);
+    setLoading(true);
+    
+    try {
+      const res = await axios.post(`${API}/nep/chat`, {
+        session_id: activeSessionId,
+        message: userMessage.content,
+        urls: userMessage.urls
+      });
+      
+      if (res.data.session_id && !activeSessionId) {
+        setActiveSessionId(res.data.session_id);
+        fetchSessions();
+      }
+      
+      const nepMessage = {
+        role: 'nep',
+        content: res.data.response,
+        timestamp: new Date().toISOString(),
+        has_proposal: res.data.has_proposal,
+        proposal: res.data.proposal,
+        proposal_status: res.data.has_proposal ? 'pending' : null,
+        message_index: res.data.message_index
+      };
+      
+      setMessages(prev => [...prev, nepMessage]);
+    } catch (error) {
+      toast.error('Nep is having trouble thinking...');
+      setMessages(prev => [...prev, {
+        role: 'nep',
+        content: "yo my bad, something's not working right. try again?",
+        timestamp: new Date().toISOString()
+      }]);
+    }
+    
+    setLoading(false);
+  };
+
+  // Confirm proposal
+  const confirmProposal = async (messageIndex) => {
+    try {
+      const res = await axios.post(`${API}/nep/confirm`, {
+        session_id: activeSessionId,
+        message_index: messageIndex,
+        approved: true
+      });
+      
+      if (res.data.success) {
+        toast.success(res.data.message || 'Changes applied!');
+        setMessages(prev => prev.map((msg, idx) => 
+          idx === messageIndex ? { ...msg, proposal_status: 'approved' } : msg
+        ));
+        onAction?.();
+      }
+    } catch (error) {
+      toast.error('Failed to apply changes');
+    }
+  };
+
+  // Reject proposal
+  const rejectProposal = async (messageIndex) => {
+    try {
+      await axios.post(`${API}/nep/confirm`, {
+        session_id: activeSessionId,
+        message_index: messageIndex,
+        approved: false
+      });
+      
+      setMessages(prev => prev.map((msg, idx) => 
+        idx === messageIndex ? { ...msg, proposal_status: 'rejected' } : msg
+      ));
+    } catch (error) {
+      toast.error('Failed to update');
+    }
+  };
+
+  // Add URL
+  const addUrl = () => {
+    if (urlInput.trim() && urlInput.startsWith('http')) {
+      setUrls(prev => [...prev, urlInput.trim()]);
+      setUrlInput('');
+    }
+  };
+
+  // Auto-scroll
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Initial load
+  useEffect(() => {
+    fetchSessions();
+  }, []);
+
+  // Handle Enter key
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  return (
+    <div className="flex h-[600px] bg-[#09090B] rounded-lg border border-white/10 overflow-hidden">
+      {/* Sidebar */}
+      {showSidebar && (
+        <SessionSidebar
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          onSelectSession={loadSession}
+          onNewSession={startNewChat}
+          onDeleteSession={deleteSession}
+        />
+      )}
+      
+      {/* Chat Area */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-white/10">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowSidebar(!showSidebar)}
+              className="text-white/50 hover:text-white p-1"
+            >
+              <MessageSquare size={18} />
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#C8102E] to-[#8B0000] flex items-center justify-center">
+                <Sparkles size={16} className="text-white" />
+              </div>
+              <div>
+                <h3 className="text-white font-bold text-sm">Nep</h3>
+                <p className="text-white/40 text-xs">Your dev partner</p>
+              </div>
+            </div>
+          </div>
+          
+          {loading && (
+            <div className="flex items-center gap-2 text-[#C8102E] text-xs">
+              <RefreshCw size={14} className="animate-spin" />
+              thinking...
+            </div>
+          )}
+        </div>
+        
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#C8102E] to-[#8B0000] flex items-center justify-center mb-4">
+                <Sparkles size={28} className="text-white" />
+              </div>
+              <h3 className="text-white font-bold text-lg mb-2">yo, what's good?</h3>
+              <p className="text-white/50 text-sm max-w-md">
+                I'm Nep, your dev partner. Tell me what you wanna change on the site, 
+                share some URLs for inspo, or just brainstorm with me. Let's cook.
+              </p>
+              
+              <div className="flex flex-wrap gap-2 mt-6 max-w-md justify-center">
+                {[
+                  "make the hero section more impactful",
+                  "I want the site to feel more premium",
+                  "check out this design I like",
+                  "what do you think about glassmorphism?"
+                ].map((suggestion, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setInput(suggestion)}
+                    className="text-xs bg-white/5 border border-white/10 text-white/70 px-3 py-1.5 rounded-full hover:bg-white/10 hover:text-white transition-colors"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            messages.map((msg, idx) => (
+              <ChatMessage
+                key={idx}
+                message={msg}
+                onConfirm={() => confirmProposal(idx)}
+                onReject={() => rejectProposal(idx)}
+              />
+            ))
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+        
+        {/* URL Chips */}
+        {urls.length > 0 && (
+          <div className="px-4 pb-2 flex flex-wrap gap-1">
+            {urls.map((url, idx) => (
+              <div key={idx} className="flex items-center gap-1 bg-[#C8102E]/20 text-[#C8102E] text-xs px-2 py-1 rounded">
+                <Link2 size={10} />
+                <span className="truncate max-w-[150px]">{new URL(url).hostname}</span>
+                <button onClick={() => setUrls(prev => prev.filter((_, i) => i !== idx))} className="hover:text-white">
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        
+        {/* URL Input */}
+        {showUrlInput && (
+          <div className="px-4 pb-2 flex gap-2">
+            <Input
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              placeholder="Paste a URL to analyze..."
+              className="bg-black border-white/20 text-white text-sm"
+              onKeyPress={(e) => e.key === 'Enter' && addUrl()}
+            />
+            <Button onClick={addUrl} size="sm" variant="outline" className="border-white/20 text-white">
+              Add
+            </Button>
+            <Button onClick={() => setShowUrlInput(false)} size="sm" variant="ghost" className="text-white/50">
+              <X size={16} />
+            </Button>
+          </div>
+        )}
+        
+        {/* Input Area */}
+        <div className="p-4 border-t border-white/10">
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setShowUrlInput(!showUrlInput)}
+              variant="outline"
+              size="icon"
+              className={`border-white/20 ${showUrlInput || urls.length > 0 ? 'text-[#C8102E] border-[#C8102E]/50' : 'text-white/50'} hover:text-white`}
+              title="Add URL to analyze"
+            >
+              <Link2 size={18} />
+            </Button>
+            
+            <Textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="talk to Nep..."
+              className="bg-black border-white/20 text-white min-h-[44px] max-h-[120px] resize-none"
+              rows={1}
+            />
+            
+            <Button
+              onClick={sendMessage}
+              disabled={loading || (!input.trim() && urls.length === 0)}
+              className="bg-[#C8102E] hover:bg-[#9e0c24] text-white px-4"
+            >
+              {loading ? <RefreshCw size={18} className="animate-spin" /> : <Send size={18} />}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// The Doc Panel (keeping this from original)
 const TheDocPanel = ({ onFix }) => {
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState(null);
@@ -91,7 +556,7 @@ const TheDocPanel = ({ onFix }) => {
       const res = await axios.post(`${API}/neplit/doc/fix?fix_type=${fixType}`);
       if (res.data.fixed) {
         toast.success(res.data.message);
-        runCheck(); // Re-run check after fix
+        runCheck();
         onFix?.();
       } else {
         toast.error(res.data.message);
@@ -124,7 +589,6 @@ const TheDocPanel = ({ onFix }) => {
 
       {result && (
         <div className="space-y-4 mt-4">
-          {/* Status Badge */}
           <div className={`flex items-center gap-2 p-3 rounded ${
             result.healthy ? 'bg-green-500/10 border border-green-500/30' : 'bg-yellow-500/10 border border-yellow-500/30'
           }`}>
@@ -143,10 +607,8 @@ const TheDocPanel = ({ onFix }) => {
             )}
           </div>
 
-          {/* Issues */}
           {result.issues?.length > 0 && (
             <div className="space-y-2">
-              <h4 className="text-white/70 text-sm font-medium">Issues</h4>
               {result.issues.map((issue, idx) => (
                 <div key={idx} className="flex items-center justify-between p-3 bg-red-500/10 rounded border border-red-500/20">
                   <div>
@@ -166,247 +628,8 @@ const TheDocPanel = ({ onFix }) => {
               ))}
             </div>
           )}
-
-          {/* Warnings */}
-          {result.warnings?.length > 0 && (
-            <div className="space-y-2">
-              <h4 className="text-white/70 text-sm font-medium">Warnings</h4>
-              {result.warnings.map((warning, idx) => (
-                <div key={idx} className="p-3 bg-yellow-500/10 rounded border border-yellow-500/20">
-                  <p className="text-white/80 text-sm">{warning.message}</p>
-                  <p className="text-white/40 text-xs">Severity: {warning.severity}</p>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
-    </div>
-  );
-};
-
-// AI Analyzer Panel
-const AIAnalyzerPanel = ({ onPlanApplied }) => {
-  const [command, setCommand] = useState('');
-  const [analyzing, setAnalyzing] = useState(false);
-  const [plan, setPlan] = useState(null);
-  const [applying, setApplying] = useState(false);
-
-  const analyzeCommand = async () => {
-    if (!command.trim()) return;
-    setAnalyzing(true);
-    setPlan(null);
-
-    try {
-      const res = await axios.post(`${API}/neplit/analyze`, { command });
-      if (res.data.error) {
-        toast.error(res.data.error);
-        // Fall back to direct execution
-        executeDirectCommand();
-      } else {
-        setPlan(res.data.plan);
-      }
-    } catch (error) {
-      toast.error("Analysis failed, trying direct execution...");
-      executeDirectCommand();
-    }
-    setAnalyzing(false);
-  };
-
-  const executeDirectCommand = async () => {
-    try {
-      const res = await axios.post(`${API}/neplit/execute`, { command });
-      toast.success(res.data.result);
-      setCommand('');
-      onPlanApplied?.();
-    } catch (error) {
-      toast.error("Command failed");
-    }
-  };
-
-  const applyPlan = async () => {
-    if (!plan) return;
-    setApplying(true);
-
-    try {
-      const res = await axios.post(`${API}/neplit/apply-plan`, {
-        command,
-        plan,
-        confirmed: true
-      });
-
-      if (res.data.success) {
-        toast.success(`Applied ${res.data.changes_applied?.length || 0} changes`);
-        setPlan(null);
-        setCommand('');
-        onPlanApplied?.();
-      } else {
-        toast.error(res.data.errors?.[0]?.error || "Failed to apply changes");
-      }
-    } catch (error) {
-      toast.error("Failed to apply plan");
-    }
-    setApplying(false);
-  };
-
-  const getRiskColor = (risk) => {
-    switch (risk) {
-      case 'low': return 'text-green-400 bg-green-500/10 border-green-500/30';
-      case 'medium': return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
-      case 'high': return 'text-red-400 bg-red-500/10 border-red-500/30';
-      default: return 'text-white/50 bg-white/5 border-white/10';
-    }
-  };
-
-  return (
-    <div className="bg-[#09090B] p-6 rounded-lg border border-white/10">
-      <div className="flex items-center gap-3 mb-4">
-        <Zap className="text-yellow-400" size={24} />
-        <div>
-          <h3 className="font-heading text-xl font-bold text-white uppercase">AI Command Analyzer</h3>
-          <p className="text-white/50 text-sm">Describe changes in natural language</p>
-        </div>
-      </div>
-
-      <Textarea
-        value={command}
-        onChange={(e) => setCommand(e.target.value)}
-        placeholder="e.g., 'Change the hero headline to THE LEGACY AWAITS and update the tagline to something more exciting'"
-        className="bg-black border-white/20 text-white min-h-[100px] mb-4"
-      />
-
-      <div className="flex gap-3 mb-4">
-        <Button 
-          onClick={analyzeCommand}
-          disabled={analyzing || !command.trim()}
-          className="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30"
-        >
-          {analyzing ? <RefreshCw className="animate-spin mr-2" size={16} /> : <Zap className="mr-2" size={16} />}
-          Analyze & Plan
-        </Button>
-        <Button 
-          onClick={executeDirectCommand}
-          disabled={analyzing || !command.trim()}
-          variant="outline"
-          className="border-white/20 text-white/70 hover:bg-white/10"
-        >
-          Execute Directly
-        </Button>
-      </div>
-
-      {/* Plan Preview */}
-      {plan && (
-        <div className="mt-4 p-4 bg-black rounded border border-yellow-500/30">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-white font-medium">Generated Plan</h4>
-            <span className={`text-xs px-2 py-1 rounded border ${getRiskColor(plan.risk_level)}`}>
-              {plan.risk_level?.toUpperCase()} RISK
-            </span>
-          </div>
-
-          <p className="text-white/70 text-sm mb-3">{plan.summary}</p>
-
-          {plan.changes?.length > 0 && (
-            <div className="space-y-2 mb-4">
-              <p className="text-white/50 text-xs uppercase">Changes to apply:</p>
-              {plan.changes.map((change, idx) => (
-                <div key={idx} className="flex items-center gap-2 text-sm">
-                  <CheckCircle size={14} className="text-green-400" />
-                  <span className="text-white/70">{change.key}:</span>
-                  <span className="text-white/90 truncate">"{change.new_value}"</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {plan.warnings?.length > 0 && (
-            <div className="mb-4 p-2 bg-yellow-500/10 rounded">
-              {plan.warnings.map((w, idx) => (
-                <p key={idx} className="text-yellow-400 text-xs flex items-center gap-1">
-                  <AlertTriangle size={12} /> {w}
-                </p>
-              ))}
-            </div>
-          )}
-
-          {plan.requires_code_edit && (
-            <div className="mb-4 p-2 bg-red-500/10 rounded">
-              <p className="text-red-400 text-xs flex items-center gap-1">
-                <AlertTriangle size={12} /> {plan.code_edit_note || "This change requires code modification. Export the project to make these changes."}
-              </p>
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            <Button 
-              onClick={applyPlan}
-              disabled={applying || plan.requires_code_edit}
-              className="bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30"
-            >
-              {applying ? <RefreshCw className="animate-spin mr-2" size={16} /> : <CheckCircle className="mr-2" size={16} />}
-              Apply Changes
-            </Button>
-            <Button 
-              onClick={() => setPlan(null)}
-              variant="outline"
-              className="border-white/20 text-white/70 hover:bg-white/10"
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Quick Commands Panel
-const QuickCommandsPanel = ({ onExecute }) => {
-  const [loading, setLoading] = useState(null);
-
-  const quickCommands = [
-    { label: "Change Hero Headline", template: "Change the hero headline to 'YOUR TEXT'" },
-    { label: "Update Tagline", template: "Update the tagline to 'YOUR TEXT'" },
-    { label: "Set Petition Goal", template: "Set petition goal to 10000" },
-    { label: "Change CTA Button", template: "Change the CTA button to 'JOIN NOW'" },
-    { label: "Update Vault Headline", template: "Change the vault headline to 'YOUR TEXT'" },
-  ];
-
-  const executeCommand = async (cmd) => {
-    const userInput = window.prompt(`Enter the new value:\n\nTemplate: ${cmd.template}`);
-    if (!userInput) return;
-
-    const fullCommand = cmd.template.replace("'YOUR TEXT'", `'${userInput}'`).replace("10000", userInput);
-    
-    setLoading(cmd.label);
-    try {
-      const res = await axios.post(`${API}/neplit/execute`, { command: fullCommand });
-      toast.success(res.data.result);
-      onExecute?.();
-    } catch (error) {
-      toast.error("Command failed");
-    }
-    setLoading(null);
-  };
-
-  return (
-    <div className="bg-[#09090B] p-6 rounded-lg border border-white/10">
-      <h3 className="font-heading text-lg font-bold text-white uppercase mb-4">Quick Commands</h3>
-      <div className="flex flex-wrap gap-2">
-        {quickCommands.map((cmd) => (
-          <Button
-            key={cmd.label}
-            onClick={() => executeCommand(cmd)}
-            disabled={loading === cmd.label}
-            variant="outline"
-            size="sm"
-            className="border-white/20 text-white/70 hover:bg-white/10 hover:text-white"
-          >
-            {loading === cmd.label ? <RefreshCw className="animate-spin mr-1" size={12} /> : null}
-            {cmd.label}
-          </Button>
-        ))}
-      </div>
     </div>
   );
 };
@@ -465,7 +688,7 @@ const NeplitControl = () => {
     try {
       const response = await axios.get(`${API}/neplit/export`, {
         responseType: 'blob',
-        timeout: 120000 // 2 minute timeout for large exports
+        timeout: 120000
       });
       
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -493,11 +716,14 @@ const NeplitControl = () => {
           <Package className="text-[#C8102E]" size={32} />
           <div>
             <h2 className="font-heading text-3xl font-bold text-white uppercase">Neplit</h2>
-            <p className="text-white/60">Site control, AI commands & standalone export</p>
+            <p className="text-white/60">Chat with Nep, export standalone builds</p>
           </div>
         </div>
         <ConnectivityIndicator isOnline={isOnline} isApiConnected={isApiConnected} />
       </div>
+
+      {/* Nep Chat */}
+      <NepChat onAction={fetchLogs} />
 
       {/* Export Section */}
       <div className="bg-gradient-to-r from-[#C8102E]/20 to-transparent p-6 rounded-lg border border-[#C8102E]/50">
@@ -508,41 +734,28 @@ const NeplitControl = () => {
               Generate Standalone Build
             </h3>
             <p className="text-white/70 text-sm mt-2">
-              Export your complete NBA 2K Legacy Vault as an independent package:
+              Export your complete project as an independent package with Gemini AI.
             </p>
-            <ul className="text-white/60 text-sm mt-3 space-y-1">
-              <li>• Full React frontend + FastAPI backend</li>
-              <li>• Gemini AI integration (direct API, no platform dependency)</li>
-              <li>• MongoDB schema & configuration</li>
-              <li>• .env.example files (no secrets included)</li>
-              <li>• Deployment guide for Vercel/Railway</li>
-            </ul>
           </div>
           <Button 
             onClick={downloadProject} 
             disabled={downloading}
-            className="bg-[#C8102E] hover:bg-[#9e0c24] text-white px-8 py-6 text-lg"
+            className="bg-[#C8102E] hover:bg-[#9e0c24] text-white px-6 py-5"
           >
             {downloading ? (
               <>
-                <RefreshCw className="animate-spin mr-2" size={20} />
+                <RefreshCw className="animate-spin mr-2" size={18} />
                 Generating...
               </>
             ) : (
               <>
-                <Download className="mr-2" size={20} />
+                <Download className="mr-2" size={18} />
                 Download ZIP
               </>
             )}
           </Button>
         </div>
       </div>
-
-      {/* AI Analyzer */}
-      <AIAnalyzerPanel onPlanApplied={fetchLogs} />
-
-      {/* Quick Commands */}
-      <QuickCommandsPanel onExecute={fetchLogs} />
 
       {/* The Doc */}
       <TheDocPanel onFix={fetchLogs} />
@@ -566,18 +779,23 @@ const NeplitControl = () => {
             {logs.length === 0 ? (
               <p className="text-white/40 text-sm text-center py-4">No actions logged yet</p>
             ) : (
-              logs.map((log) => <LogItem key={log.id} log={log} />)
+              logs.map((log) => (
+                <div key={log.id} className="flex items-start gap-3 p-3 bg-black/50 rounded border border-white/5 text-sm">
+                  <FileText size={14} className="text-blue-400 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white/80 truncate">{log.description}</p>
+                    <p className="text-white/40 text-xs mt-1">
+                      {new Date(log.timestamp).toLocaleString()}
+                    </p>
+                  </div>
+                  <span className={`text-xs uppercase ${log.status === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                    {log.status}
+                  </span>
+                </div>
+              ))
             )}
           </div>
         )}
-      </div>
-
-      {/* Info Footer */}
-      <div className="bg-black/50 p-4 rounded-lg border border-white/10">
-        <p className="text-white/50 text-xs">
-          <strong className="text-white/70">Note:</strong> The exported project is 100% standalone with Gemini AI integration. 
-          Deploy anywhere — Vercel, Railway, Render, or your own server. No platform dependencies.
-        </p>
       </div>
     </div>
   );
