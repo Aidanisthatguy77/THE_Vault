@@ -208,12 +208,115 @@ class Mockup(BaseModel):
     order: int = 0
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
-# ============ HEALTH CHECK ============
+# ============ SYSTEM HEALTH CHECK (ENHANCED) ============
+
+class SystemHealth(BaseModel):
+    status: str
+    timestamp: str
+    services: dict
+    database: dict
+    uptime: str
 
 @api_router.get("/health")
 async def health_check():
-    """Health check endpoint for connectivity status"""
-    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
+    """Comprehensive health check endpoint for System Pulse monitoring"""
+    import time
+    start_time = time.time()
+    
+    health_data = {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "services": {
+            "api": "online",
+            "ai": "unknown"
+        },
+        "database": {
+            "status": "unknown",
+            "collections": 0
+        },
+        "uptime": "active"
+    }
+    
+    # Check database connectivity
+    try:
+        collections = await db.list_collection_names()
+        health_data["database"]["status"] = "connected"
+        health_data["database"]["collections"] = len(collections)
+        health_data["database"]["latency_ms"] = round((time.time() - start_time) * 1000, 2)
+    except Exception as e:
+        health_data["database"]["status"] = "error"
+        health_data["database"]["error"] = str(e)
+        health_data["status"] = "degraded"
+    
+    # Check if LLM is available
+    try:
+        llm_key = os.environ.get('EMERGENT_LLM_KEY', '')
+        health_data["services"]["ai"] = "configured" if llm_key else "not_configured"
+    except Exception:
+        health_data["services"]["ai"] = "error"
+    
+    return health_data
+
+@api_router.get("/health/pulse")
+async def system_pulse():
+    """Quick pulse check for System Pulse indicator (lightweight)"""
+    try:
+        # Quick DB ping
+        await db.command('ping')
+        return {
+            "pulse": "alive",
+            "backend": True,
+            "database": True,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception:
+        return {
+            "pulse": "degraded",
+            "backend": True,
+            "database": False,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+# ============ ADMIN SECRETS VAULT ============
+
+class SecretStore(BaseModel):
+    key: str
+    value: str
+    description: Optional[str] = None
+
+@api_router.get("/admin/secrets")
+async def get_secrets():
+    """Get stored deployment secrets (values masked)"""
+    secrets = await db.secrets_vault.find({}, {"_id": 0}).to_list(50)
+    # Mask the actual values
+    for secret in secrets:
+        if secret.get("value"):
+            secret["value"] = "••••••••" + secret["value"][-4:] if len(secret["value"]) > 4 else "••••"
+    return secrets
+
+@api_router.post("/admin/secrets")
+async def save_secret(secret: SecretStore):
+    """Save a deployment secret to the vault"""
+    await db.secrets_vault.update_one(
+        {"key": secret.key},
+        {"$set": {
+            "key": secret.key,
+            "value": secret.value,
+            "description": secret.description,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }},
+        upsert=True
+    )
+    await log_neplit_action("secret_saved", f"Saved secret: {secret.key}")
+    return {"success": True, "message": f"Secret '{secret.key}' saved"}
+
+@api_router.delete("/admin/secrets/{key}")
+async def delete_secret(key: str):
+    """Delete a secret from the vault"""
+    result = await db.secrets_vault.delete_one({"key": key})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Secret not found")
+    return {"success": True, "message": f"Secret '{key}' deleted"}
 
 # ============ GAME ROUTES ============
 

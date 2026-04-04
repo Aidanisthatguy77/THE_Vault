@@ -5,7 +5,8 @@ import {
   CheckCircle, XCircle, AlertTriangle, Clock, 
   ChevronDown, ChevronUp, Wifi, WifiOff, Activity,
   Send, MessageSquare, Plus, Trash2, ExternalLink,
-  Check, X, Sparkles, History, Search, Link2
+  Check, X, Sparkles, History, Search, Link2,
+  Database, Server, Cpu, Key, Lock, Eye, EyeOff, Terminal
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,291 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+// ============ SYSTEM PULSE INDICATOR ============
+const SystemPulse = () => {
+  const [health, setHealth] = useState({
+    backend: false,
+    database: false,
+    pulse: 'checking'
+  });
+  const [expanded, setExpanded] = useState(false);
+  const [fullHealth, setFullHealth] = useState(null);
+
+  const checkPulse = async () => {
+    try {
+      const res = await axios.get(`${API}/health/pulse`, { timeout: 5000 });
+      setHealth({
+        backend: res.data.backend,
+        database: res.data.database,
+        pulse: res.data.pulse
+      });
+    } catch {
+      setHealth({ backend: false, database: false, pulse: 'offline' });
+    }
+  };
+
+  const fetchFullHealth = async () => {
+    try {
+      const res = await axios.get(`${API}/health`, { timeout: 10000 });
+      setFullHealth(res.data);
+    } catch (error) {
+      setFullHealth({ status: 'error', error: error.message });
+    }
+  };
+
+  useEffect(() => {
+    checkPulse();
+    const interval = setInterval(checkPulse, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (expanded) fetchFullHealth();
+  }, [expanded]);
+
+  const pulseColor = health.pulse === 'alive' ? 'bg-green-500' : 
+                     health.pulse === 'degraded' ? 'bg-yellow-500' : 'bg-red-500';
+  const pulseGlow = health.pulse === 'alive' ? 'shadow-green-500/50' :
+                    health.pulse === 'degraded' ? 'shadow-yellow-500/50' : 'shadow-red-500/50';
+
+  return (
+    <div className="bg-[#09090B] p-4 rounded-lg border border-white/10">
+      <button 
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center justify-between w-full"
+      >
+        <div className="flex items-center gap-3">
+          <div className={`w-3 h-3 rounded-full ${pulseColor} ${pulseGlow} shadow-lg animate-pulse`} />
+          <span className="text-white font-medium">System Pulse</span>
+          <span className="text-white/40 text-xs uppercase">{health.pulse}</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Server size={14} className={health.backend ? 'text-green-400' : 'text-red-400'} />
+            <span className="text-xs text-white/50">API</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Database size={14} className={health.database ? 'text-green-400' : 'text-red-400'} />
+            <span className="text-xs text-white/50">DB</span>
+          </div>
+          {expanded ? <ChevronUp size={16} className="text-white/40" /> : <ChevronDown size={16} className="text-white/40" />}
+        </div>
+      </button>
+
+      {expanded && fullHealth && (
+        <div className="mt-4 p-4 bg-black/50 rounded border border-white/10 space-y-3">
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <p className="text-white/50 text-xs uppercase mb-1">Status</p>
+              <p className={`font-medium ${fullHealth.status === 'healthy' ? 'text-green-400' : 'text-yellow-400'}`}>
+                {fullHealth.status?.toUpperCase()}
+              </p>
+            </div>
+            <div>
+              <p className="text-white/50 text-xs uppercase mb-1">Last Check</p>
+              <p className="text-white/80">{new Date(fullHealth.timestamp).toLocaleTimeString()}</p>
+            </div>
+            {fullHealth.database && (
+              <>
+                <div>
+                  <p className="text-white/50 text-xs uppercase mb-1">Database</p>
+                  <p className={`font-medium ${fullHealth.database.status === 'connected' ? 'text-green-400' : 'text-red-400'}`}>
+                    {fullHealth.database.status}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-white/50 text-xs uppercase mb-1">Latency</p>
+                  <p className="text-white/80">{fullHealth.database.latency_ms || 0}ms</p>
+                </div>
+              </>
+            )}
+            {fullHealth.services && (
+              <div>
+                <p className="text-white/50 text-xs uppercase mb-1">AI Service</p>
+                <p className={`font-medium ${fullHealth.services.ai === 'configured' ? 'text-green-400' : 'text-yellow-400'}`}>
+                  {fullHealth.services.ai}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ============ SECRETS VAULT ============
+const SecretsVault = () => {
+  const [secrets, setSecrets] = useState([]);
+  const [expanded, setExpanded] = useState(false);
+  const [newKey, setNewKey] = useState('');
+  const [newValue, setNewValue] = useState('');
+  const [newDesc, setNewDesc] = useState('');
+  const [showValue, setShowValue] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  const fetchSecrets = async () => {
+    try {
+      const res = await axios.get(`${API}/admin/secrets`);
+      setSecrets(res.data);
+    } catch (error) {
+      console.error('Failed to fetch secrets');
+    }
+  };
+
+  useEffect(() => {
+    if (expanded) fetchSecrets();
+  }, [expanded]);
+
+  const saveSecret = async () => {
+    if (!newKey.trim() || !newValue.trim()) {
+      toast.error('Key and value are required');
+      return;
+    }
+    
+    setSaving(true);
+    try {
+      await axios.post(`${API}/admin/secrets`, {
+        key: newKey,
+        value: newValue,
+        description: newDesc
+      });
+      toast.success(`Secret '${newKey}' saved`);
+      setNewKey('');
+      setNewValue('');
+      setNewDesc('');
+      fetchSecrets();
+    } catch (error) {
+      toast.error('Failed to save secret');
+    }
+    setSaving(false);
+  };
+
+  const deleteSecret = async (key) => {
+    if (!window.confirm(`Delete secret '${key}'?`)) return;
+    try {
+      await axios.delete(`${API}/admin/secrets/${key}`);
+      toast.success('Secret deleted');
+      fetchSecrets();
+    } catch (error) {
+      toast.error('Failed to delete secret');
+    }
+  };
+
+  const presetSecrets = [
+    { key: 'VERCEL_TOKEN', desc: 'Vercel deployment token' },
+    { key: 'MONGODB_URI', desc: 'Production MongoDB connection string' },
+    { key: 'GEMINI_API_KEY', desc: 'Google Gemini API key for AI chat' },
+    { key: 'SUPABASE_URL', desc: 'Supabase project URL' },
+    { key: 'SUPABASE_KEY', desc: 'Supabase anon/service key' }
+  ];
+
+  return (
+    <div className="bg-[#09090B] p-6 rounded-lg border border-white/10">
+      <button 
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center justify-between w-full"
+      >
+        <div className="flex items-center gap-3">
+          <Key className="text-yellow-400" size={20} />
+          <h3 className="font-heading text-lg font-bold text-white uppercase">Secrets Vault</h3>
+          <Lock size={14} className="text-white/30" />
+        </div>
+        {expanded ? <ChevronUp className="text-white/50" /> : <ChevronDown className="text-white/50" />}
+      </button>
+
+      {expanded && (
+        <div className="mt-4 space-y-4">
+          {/* Existing secrets */}
+          {secrets.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-white/50 text-xs uppercase">Stored Secrets</p>
+              {secrets.map((secret) => (
+                <div key={secret.key} className="flex items-center justify-between p-3 bg-black/50 rounded border border-white/10">
+                  <div className="flex-1">
+                    <p className="text-white/80 font-mono text-sm">{secret.key}</p>
+                    {secret.description && <p className="text-white/40 text-xs mt-1">{secret.description}</p>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-white/50 font-mono text-xs">{secret.value}</span>
+                    <button onClick={() => deleteSecret(secret.key)} className="text-red-400/50 hover:text-red-400 p-1">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add new secret */}
+          <div className="p-4 bg-black/30 rounded border border-white/10 space-y-3">
+            <p className="text-white/70 text-sm font-medium">Add New Secret</p>
+            
+            {/* Preset buttons */}
+            <div className="flex flex-wrap gap-1">
+              {presetSecrets.map((preset) => (
+                <button
+                  key={preset.key}
+                  onClick={() => { setNewKey(preset.key); setNewDesc(preset.desc); }}
+                  className={`text-xs px-2 py-1 rounded border ${
+                    newKey === preset.key 
+                      ? 'bg-[#C8102E]/20 border-[#C8102E]/50 text-[#C8102E]' 
+                      : 'bg-white/5 border-white/10 text-white/50 hover:text-white/80'
+                  }`}
+                >
+                  {preset.key}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                value={newKey}
+                onChange={(e) => setNewKey(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''))}
+                placeholder="SECRET_KEY"
+                className="bg-black border-white/20 text-white font-mono text-sm"
+              />
+              <div className="relative">
+                <Input
+                  type={showValue.new ? 'text' : 'password'}
+                  value={newValue}
+                  onChange={(e) => setNewValue(e.target.value)}
+                  placeholder="secret_value"
+                  className="bg-black border-white/20 text-white font-mono text-sm pr-10"
+                />
+                <button 
+                  onClick={() => setShowValue(prev => ({ ...prev, new: !prev.new }))}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70"
+                >
+                  {showValue.new ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+            <Input
+              value={newDesc}
+              onChange={(e) => setNewDesc(e.target.value)}
+              placeholder="Description (optional)"
+              className="bg-black border-white/20 text-white text-sm"
+            />
+            <Button 
+              onClick={saveSecret}
+              disabled={saving || !newKey.trim() || !newValue.trim()}
+              className="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30"
+            >
+              {saving ? <RefreshCw className="animate-spin mr-2" size={14} /> : <Key className="mr-2" size={14} />}
+              Save Secret
+            </Button>
+          </div>
+          
+          <p className="text-white/30 text-xs">
+            Secrets are encrypted and stored in the database. Use these for deployment configurations.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // Connectivity Status Indicator
 const ConnectivityIndicator = ({ isOnline, isApiConnected }) => {
@@ -722,6 +1008,9 @@ const NeplitControl = () => {
         <ConnectivityIndicator isOnline={isOnline} isApiConnected={isApiConnected} />
       </div>
 
+      {/* System Pulse */}
+      <SystemPulse />
+
       {/* Nep Chat */}
       <NepChat onAction={fetchLogs} />
 
@@ -759,6 +1048,9 @@ const NeplitControl = () => {
 
       {/* The Doc */}
       <TheDocPanel onFix={fetchLogs} />
+
+      {/* Secrets Vault */}
+      <SecretsVault />
 
       {/* Action Logs */}
       <div className="bg-[#09090B] p-6 rounded-lg border border-white/10">
