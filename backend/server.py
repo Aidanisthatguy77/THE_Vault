@@ -967,6 +967,9 @@ class ChatMessage(BaseModel):
 class ChatResponse(BaseModel):
     response: str
     session_id: str
+    model_used: Optional[str] = None
+    model_version: Optional[str] = None
+    media_analyses: Optional[List[dict]] = None
 
 # Store chat sessions in memory (for simplicity)
 chat_sessions = {}
@@ -1240,35 +1243,177 @@ async def search_web(query: str) -> str:
         logger.error(f"Search error: {str(e)}")
         return f"[Web search unavailable: {str(e)}]"
 
+# ============ UNIFIED VAULT ENGINE - DUAL AI SYSTEM ============
+
+# Media patterns for routing to Claude (Media Engine)
+MEDIA_PLATFORMS = ['youtube.com', 'youtu.be', 'twitter.com', 'x.com', 'facebook.com', 'fb.com', 'tiktok.com', 'instagram.com', 'reddit.com']
+
+def is_media_link(url: str) -> bool:
+    """Check if URL is a media platform that should use Claude"""
+    url_lower = url.lower()
+    return any(platform in url_lower for platform in MEDIA_PLATFORMS)
+
+def detect_media_links(message: str) -> List[str]:
+    """Extract media platform URLs from message"""
+    urls = URL_PATTERN.findall(message)
+    return [url for url in urls if is_media_link(url)]
+
+# Vault AI Chat Message with model tracking
+class VaultChatMessage(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    session_id: str
+    role: str  # "user" or "assistant"
+    content: str
+    model_used: Optional[str] = None  # "claude" or "gemini"
+    model_version: Optional[str] = None
+    media_metadata: Optional[dict] = None  # For Claude media analysis
+    has_media_analysis: bool = False
+    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class VaultAnalysis(BaseModel):
+    """Media analysis result from Claude"""
+    platform: str
+    url: str
+    title: Optional[str] = None
+    summary: Optional[str] = None
+    sentiment: Optional[str] = None
+    key_points: List[str] = []
+    preview_url: Optional[str] = None
+    author: Optional[str] = None
+    engagement: Optional[dict] = None
+
+async def analyze_media_with_claude(url: str, content: str) -> dict:
+    """Use Claude (Media Engine) for deep media analysis"""
+    try:
+        api_key = os.environ.get('EMERGENT_LLM_KEY')
+        if not api_key:
+            return {"error": "API key not configured"}
+        
+        platform = identify_platform(url)
+        
+        claude_chat = LlmChat(
+            api_key=api_key,
+            session_id=f"media-analysis-{uuid.uuid4()}",
+            system_message="""You are the Vault Media Engine, specialized in analyzing social media content.
+            
+When given content from YouTube, X/Twitter, Facebook, TikTok, Instagram, or Reddit:
+1. Extract the main message/argument
+2. Identify the author's stance
+3. Note key claims or points
+4. Assess sentiment (supportive/neutral/critical)
+5. Provide a concise summary
+
+Return your analysis in this JSON format:
+{
+  "title": "Content title or main topic",
+  "author": "Username/channel if identified",
+  "platform": "platform name",
+  "summary": "2-3 sentence summary",
+  "sentiment": "supportive/neutral/critical/mixed",
+  "key_points": ["point 1", "point 2", "point 3"],
+  "relevance_to_vault": "How this relates to the Legacy Vault concept"
+}
+
+Be thorough but concise. Focus on facts and analysis."""
+        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+        
+        user_msg = UserMessage(text=f"Analyze this {platform} content:\n\nURL: {url}\n\nContent:\n{content}")
+        response = await claude_chat.send_message(user_msg)
+        
+        # Try to parse JSON from response
+        try:
+            # Clean response
+            clean_response = response.strip()
+            if "```json" in clean_response:
+                clean_response = clean_response.split("```json")[1].split("```")[0]
+            elif "```" in clean_response:
+                clean_response = clean_response.split("```")[1].split("```")[0]
+            
+            analysis = json.loads(clean_response)
+            analysis["url"] = url
+            analysis["platform"] = platform
+            return analysis
+        except Exception:
+            # Return as text if JSON parsing fails
+            return {
+                "url": url,
+                "platform": platform,
+                "title": f"{platform.title()} Content Analysis",
+                "summary": response[:500],
+                "sentiment": "analyzed",
+                "key_points": [],
+                "raw_analysis": response
+            }
+    except Exception as e:
+        logger.error(f"Claude media analysis error: {str(e)}")
+        return {"error": str(e), "url": url, "platform": identify_platform(url)}
+
 @api_router.post("/chat", response_model=ChatResponse)
 async def chat_with_vault_ai(chat_message: ChatMessage):
-    """Chat with Vault AI - with full social media and web access"""
+    """Chat with Vault AI - Dual Engine: Claude (Media) + Gemini (Logic)"""
     try:
         session_id = chat_message.session_id or str(uuid.uuid4())
         user_msg = chat_message.message
         
-        # Check for URLs in the message
-        urls = URL_PATTERN.findall(user_msg)
-        context_additions = []
+        # Detect media links for Claude routing
+        media_urls = detect_media_links(user_msg)
+        all_urls = URL_PATTERN.findall(user_msg)
         
-        # Fetch content from any URLs (support up to 3 links)
-        if urls:
+        context_additions = []
+        media_analyses = []
+        model_used = "gemini"  # Default to Gemini (Logic Engine)
+        model_version = "gemini-2.5-flash"
+        
+        # Process media URLs with Claude (Media Engine)
+        if media_urls:
+            model_used = "claude"
+            model_version = "claude-sonnet-4-5-20250929"
+            context_additions.append("\n\n--- VAULT MEDIA ANALYSIS (Claude Media Engine) ---")
+            
+            for url in media_urls[:3]:
+                platform = identify_platform(url)
+                context_additions.append(f"\n[Deep analyzing {platform.upper()} with Media Engine: {url}]")
+                
+                # Fetch content
+                content = await fetch_url_content(url)
+                if content:
+                    # Get Claude's deep analysis
+                    analysis = await analyze_media_with_claude(url, content)
+                    media_analyses.append(analysis)
+                    
+                    if "error" not in analysis:
+                        context_additions.append("\nMedia Analysis Result:")
+                        context_additions.append(f"- Platform: {analysis.get('platform', platform)}")
+                        context_additions.append(f"- Title: {analysis.get('title', 'N/A')}")
+                        context_additions.append(f"- Sentiment: {analysis.get('sentiment', 'N/A')}")
+                        context_additions.append(f"- Summary: {analysis.get('summary', 'N/A')}")
+                        if analysis.get('key_points'):
+                            context_additions.append(f"- Key Points: {', '.join(analysis['key_points'][:5])}")
+                        if analysis.get('relevance_to_vault'):
+                            context_additions.append(f"- Vault Relevance: {analysis.get('relevance_to_vault')}")
+                    else:
+                        context_additions.append(f"\n[Analysis error: {analysis.get('error')}]")
+            
+            context_additions.append("\n--- END MEDIA ANALYSIS ---")
+            context_additions.append("\nAs the Vault AI spokesperson, use this deep media analysis to craft a comprehensive, informed response. Address specific points raised in the content.")
+        
+        # Process non-media URLs with standard scraping (for Gemini)
+        elif all_urls:
             context_additions.append("\n\n--- LINK ANALYSIS ---")
-            for url in urls[:3]:
+            for url in all_urls[:3]:
                 platform = identify_platform(url)
                 context_additions.append(f"\n[Analyzing {platform.upper()} link: {url}]")
                 content = await fetch_url_content(url)
                 if content:
                     context_additions.append(content)
             context_additions.append("\n--- END LINK ANALYSIS ---")
-            context_additions.append("\nAnalyze the content above thoroughly. Break down what's being said or shown, identify any claims, objections, or arguments, and provide a clear, informed response that addresses the specific points. If relevant, explain how the Legacy Vault concept addresses any concerns raised.")
+            context_additions.append("\nAnalyze the content above thoroughly and provide a clear, informed response.")
         
         # Check if user is asking to search/research something
         search_triggers = ['search for', 'look up', 'find info on', 'research', 'what does google say', 'check online', 'find out about']
         should_search = any(trigger in user_msg.lower() for trigger in search_triggers)
         
         if should_search:
-            # Extract search query
             search_query = user_msg.lower()
             for trigger in search_triggers:
                 search_query = search_query.replace(trigger, '')
@@ -1277,36 +1422,104 @@ async def chat_with_vault_ai(chat_message: ChatMessage):
             search_results = await search_web(search_query)
             if search_results and not search_results.startswith("["):
                 context_additions.append(f"\n\n--- WEB RESEARCH ---\n{search_results}\n--- END RESEARCH ---")
-                context_additions.append("\nUse this research to inform your response with factual, up-to-date information.")
         
-        # Build the full message with context
+        # Build the full message
         full_message = user_msg
         if context_additions:
             full_message += "".join(context_additions)
         
-        # Get or create chat session
+        # Get or create chat session with appropriate engine
         if session_id not in chat_sessions:
             api_key = os.environ.get('EMERGENT_LLM_KEY')
             if not api_key:
                 raise HTTPException(status_code=500, detail="Chat service not configured")
             
-            chat = LlmChat(
-                api_key=api_key,
-                session_id=session_id,
-                system_message=VAULT_SYSTEM_PROMPT
-            ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-            chat_sessions[session_id] = chat
+            if model_used == "claude":
+                chat = LlmChat(
+                    api_key=api_key,
+                    session_id=session_id,
+                    system_message=VAULT_SYSTEM_PROMPT
+                ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+            else:
+                chat = LlmChat(
+                    api_key=api_key,
+                    session_id=session_id,
+                    system_message=VAULT_SYSTEM_PROMPT
+                ).with_model("gemini", "gemini-2.5-flash")
+            
+            chat_sessions[session_id] = {"chat": chat, "model": model_used}
         else:
-            chat = chat_sessions[session_id]
+            session_data = chat_sessions[session_id]
+            chat = session_data["chat"]
+            # If media detected, switch to Claude for this message
+            if media_urls and session_data["model"] != "claude":
+                api_key = os.environ.get('EMERGENT_LLM_KEY')
+                chat = LlmChat(
+                    api_key=api_key,
+                    session_id=session_id + "-claude",
+                    system_message=VAULT_SYSTEM_PROMPT
+                ).with_model("anthropic", "claude-sonnet-4-5-20250929")
         
         # Send message and get response
         user_message = UserMessage(text=full_message)
         response = await chat.send_message(user_message)
         
-        return ChatResponse(response=response, session_id=session_id)
+        # Store in chat history with model info
+        chat_entry = VaultChatMessage(
+            session_id=session_id,
+            role="assistant",
+            content=response,
+            model_used=model_used,
+            model_version=model_version,
+            media_metadata={"analyses": media_analyses} if media_analyses else None,
+            has_media_analysis=len(media_analyses) > 0
+        )
+        await db.vault_chat_history.insert_one(chat_entry.model_dump())
+        
+        # Build response with media metadata
+        response_data = {
+            "response": response,
+            "session_id": session_id,
+            "model_used": model_used,
+            "model_version": model_version
+        }
+        
+        if media_analyses:
+            response_data["media_analyses"] = media_analyses
+        
+        return response_data
+        
     except Exception as e:
         logger.error(f"Chat error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
+
+# ============ VAULT CHAT HISTORY ============
+
+@api_router.get("/chat/history/{session_id}")
+async def get_chat_history(session_id: str):
+    """Get chat history with model info for a session"""
+    history = await db.vault_chat_history.find(
+        {"session_id": session_id}, 
+        {"_id": 0}
+    ).sort("timestamp", 1).to_list(100)
+    return history
+
+@api_router.get("/chat/sessions")
+async def get_chat_sessions():
+    """Get all chat sessions with summary"""
+    pipeline = [
+        {"$group": {
+            "_id": "$session_id",
+            "last_message": {"$last": "$content"},
+            "last_timestamp": {"$last": "$timestamp"},
+            "message_count": {"$sum": 1},
+            "models_used": {"$addToSet": "$model_used"}
+        }},
+        {"$sort": {"last_timestamp": -1}},
+        {"$limit": 50}
+    ]
+    sessions = await db.vault_chat_history.aggregate(pipeline).to_list(50)
+    return sessions
 
 # ============ ERA VOTING POLL ============
 
@@ -2224,8 +2437,9 @@ REACT_APP_BACKEND_URL=http://localhost:8001
                 # Create empty uploads directory
                 (backend_dst / "uploads").mkdir(exist_ok=True)
                 
-                # Create .env.example for backend with Gemini config
+                # Create .env.example for backend with DUAL AI config
                 backend_env_example = """# Backend Environment Variables
+# NBA 2K Legacy Vault - Standalone Dual-Engine AI Configuration
 
 # MongoDB Connection
 MONGO_URL=mongodb://localhost:27017
@@ -2235,11 +2449,24 @@ DB_NAME=nba2k_legacy_vault
 # CORS (comma-separated origins, or * for all)
 CORS_ORIGINS=http://localhost:3000,https://your-frontend.vercel.app
 
-# AI Chat - Gemini API Key
+# ============ DUAL AI ENGINE CONFIGURATION ============
+# The Vault uses TWO AI engines for optimal performance:
+# - Claude (Media Engine): Deep analysis of YouTube, X, Facebook, TikTok, Instagram content
+# - Gemini (Logic Engine): General commands, site management, quick responses
+
+# Anthropic Claude API Key (Media Engine)
+# Get yours at: https://console.anthropic.com/
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+
+# Google Gemini API Key (Logic Engine)
 # Get yours at: https://makersuite.google.com/app/apikey
 GEMINI_API_KEY=your_gemini_api_key_here
 
-# Admin Password (change this!)
+# Optional: OpenAI and Grok for future expansion
+# OPENAI_API_KEY=your_openai_key_here
+# GROK_API_KEY=your_grok_key_here
+
+# Admin Password (CHANGE THIS!)
 ADMIN_PASSWORD=A@070610
 """
                 (backend_dst / ".env.example").write_text(backend_env_example)
@@ -2248,39 +2475,148 @@ ADMIN_PASSWORD=A@070610
                 if env_file.exists():
                     env_file.unlink()
                 
-                # Create standalone AI chat module for Gemini
-                gemini_chat_code = '''"""
-Standalone Gemini AI Chat Integration
-Replace the Emergent LLM integration with direct Google Gemini API calls.
-"""
-import google.generativeai as genai
-import os
-from typing import Optional
+                # Create standalone DUAL-ENGINE AI module
+                dual_engine_code = '''"""
+NBA 2K Legacy Vault - Unified Dual-Engine AI System
+===================================================
+Media Engine: Claude 3.5 Sonnet (Anthropic) - For deep media/link analysis
+Logic Engine: Gemini 2.0 Flash (Google) - For general commands and quick responses
 
-# Configure Gemini
+This module provides standalone AI capabilities without platform dependencies.
+"""
+import os
+import re
+import json
+import httpx
+from typing import Optional, List, Dict
+from bs4 import BeautifulSoup
+
+# ============ MEDIA PLATFORM DETECTION ============
+MEDIA_PLATFORMS = ['youtube.com', 'youtu.be', 'twitter.com', 'x.com', 'facebook.com', 'fb.com', 'tiktok.com', 'instagram.com', 'reddit.com']
+URL_PATTERN = re.compile(r'https?://[^\\s<>"{}|\\\\^`\\[\\]]+')
+
+def is_media_link(url: str) -> bool:
+    """Check if URL is a media platform that should use Claude"""
+    url_lower = url.lower()
+    return any(platform in url_lower for platform in MEDIA_PLATFORMS)
+
+def detect_media_links(message: str) -> List[str]:
+    """Extract media platform URLs from message"""
+    urls = URL_PATTERN.findall(message)
+    return [url for url in urls if is_media_link(url)]
+
+def identify_platform(url: str) -> str:
+    """Identify which platform a URL is from"""
+    url_lower = url.lower()
+    if 'tiktok.com' in url_lower:
+        return 'tiktok'
+    elif 'twitter.com' in url_lower or 'x.com' in url_lower:
+        return 'twitter'
+    elif 'instagram.com' in url_lower:
+        return 'instagram'
+    elif 'youtube.com' in url_lower or 'youtu.be' in url_lower:
+        return 'youtube'
+    elif 'reddit.com' in url_lower:
+        return 'reddit'
+    elif 'facebook.com' in url_lower or 'fb.com' in url_lower:
+        return 'facebook'
+    return 'web'
+
+# ============ CLAUDE MEDIA ENGINE ============
+try:
+    import anthropic
+    CLAUDE_AVAILABLE = True
+except ImportError:
+    CLAUDE_AVAILABLE = False
+    print("Warning: anthropic not installed. Run: pip install anthropic")
+
+def get_claude_client():
+    """Initialize Claude client for media analysis"""
+    api_key = os.environ.get('ANTHROPIC_API_KEY')
+    if not api_key:
+        raise ValueError("ANTHROPIC_API_KEY not set in environment")
+    return anthropic.Anthropic(api_key=api_key)
+
+async def analyze_media_with_claude(url: str, content: str) -> Dict:
+    """Use Claude (Media Engine) for deep media analysis"""
+    if not CLAUDE_AVAILABLE:
+        return {"error": "Claude not available - install anthropic package"}
+    
+    try:
+        client = get_claude_client()
+        platform = identify_platform(url)
+        
+        system_prompt = """You are the Vault Media Engine, specialized in analyzing social media content.
+        
+When given content from YouTube, X/Twitter, Facebook, TikTok, Instagram, or Reddit:
+1. Extract the main message/argument
+2. Identify the author's stance
+3. Note key claims or points
+4. Assess sentiment (supportive/neutral/critical)
+5. Provide a concise summary
+
+Return your analysis in this JSON format:
+{
+  "title": "Content title or main topic",
+  "author": "Username/channel if identified",
+  "platform": "platform name",
+  "summary": "2-3 sentence summary",
+  "sentiment": "supportive/neutral/critical/mixed",
+  "key_points": ["point 1", "point 2", "point 3"],
+  "relevance_to_vault": "How this relates to the Legacy Vault concept"
+}"""
+        
+        message = client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=1024,
+            system=system_prompt,
+            messages=[{
+                "role": "user",
+                "content": f"Analyze this {platform} content:\\n\\nURL: {url}\\n\\nContent:\\n{content}"
+            }]
+        )
+        
+        response_text = message.content[0].text
+        
+        # Parse JSON
+        try:
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0]
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0]
+            
+            analysis = json.loads(response_text.strip())
+            analysis["url"] = url
+            analysis["platform"] = platform
+            return analysis
+        except:
+            return {
+                "url": url,
+                "platform": platform,
+                "summary": response_text[:500],
+                "sentiment": "analyzed"
+            }
+    except Exception as e:
+        return {"error": str(e), "url": url}
+
+# ============ GEMINI LOGIC ENGINE ============
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    print("Warning: google-generativeai not installed. Run: pip install google-generativeai")
+
 def get_gemini_client():
+    """Initialize Gemini client for logic/general chat"""
     api_key = os.environ.get('GEMINI_API_KEY')
     if not api_key:
         raise ValueError("GEMINI_API_KEY not set in environment")
     genai.configure(api_key=api_key)
     return genai.GenerativeModel('gemini-2.0-flash-exp')
 
-async def chat_with_vault_ai(message: str, context: str = "", scrape_result: str = "") -> str:
-    """
-    Send a message to the Vault AI and get a response.
-    
-    Args:
-        message: User's message
-        context: Optional context about the site
-        scrape_result: Optional scraped content from URLs
-    
-    Returns:
-        AI response as plain text
-    """
-    try:
-        model = get_gemini_client()
-        
-        system_prompt = """You are the Vault AI, the official spokesperson for the NBA 2K Legacy Vault initiative.
+# ============ VAULT AI SYSTEM PROMPT ============
+VAULT_SYSTEM_PROMPT = """You are the Vault AI, the official spokesperson for the NBA 2K Legacy Vault initiative.
 
 Your mission: Advocate for bringing back NBA 2K15, 2K16, 2K17, and 2K20 with permanent online servers.
 
@@ -2290,29 +2626,126 @@ Personality:
 - Persuasive but respectful when addressing skeptics
 - Uses facts and community sentiment as evidence
 
-When given scraped content from links, analyze it and incorporate relevant points into your response.
+When given media analysis from the Claude Media Engine, incorporate those insights into your response.
 
 Keep responses concise (under 200 words) unless detailed analysis is requested.
 Do not use markdown formatting - respond in plain text only."""
 
-        full_prompt = f"{system_prompt}\\n\\n"
-        if context:
-            full_prompt += f"Context: {context}\\n\\n"
-        if scrape_result:
-            full_prompt += f"Analyzed content from link:\\n{scrape_result}\\n\\n"
-        full_prompt += f"User: {message}\\n\\nVault AI:"
+# ============ UNIFIED CHAT FUNCTION ============
+async def chat_with_dual_engine(
+    message: str, 
+    context: str = "", 
+    scrape_result: str = ""
+) -> Dict:
+    """
+    Unified chat using dual AI engines.
+    
+    Auto-routes to:
+    - Claude (Media Engine): When media URLs detected
+    - Gemini (Logic Engine): For all other requests
+    
+    Returns:
+        Dict with response, model_used, and optional media_analyses
+    """
+    media_urls = detect_media_links(message)
+    
+    result = {
+        "response": "",
+        "model_used": "gemini",
+        "model_version": "gemini-2.0-flash",
+        "media_analyses": []
+    }
+    
+    # If media links found, use Claude for deep analysis
+    if media_urls and CLAUDE_AVAILABLE:
+        result["model_used"] = "claude"
+        result["model_version"] = "claude-3.5-sonnet"
         
-        response = model.generate_content(full_prompt)
-        return response.text.strip()
+        analyses = []
+        for url in media_urls[:3]:
+            # Fetch content
+            content = scrape_result or await fetch_url_content_standalone(url)
+            analysis = await analyze_media_with_claude(url, content)
+            analyses.append(analysis)
         
+        result["media_analyses"] = analyses
+        
+        # Build context from analyses
+        analysis_context = "\\n\\nMedia Analysis Results:\\n"
+        for a in analyses:
+            if "error" not in a:
+                analysis_context += f"- {a.get('platform', 'unknown').upper()}: {a.get('summary', 'N/A')}\\n"
+                analysis_context += f"  Sentiment: {a.get('sentiment', 'N/A')}\\n"
+        
+        context += analysis_context
+    
+    # Generate response with appropriate engine
+    try:
+        if result["model_used"] == "claude" and CLAUDE_AVAILABLE:
+            client = get_claude_client()
+            msg = client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=1024,
+                system=VAULT_SYSTEM_PROMPT,
+                messages=[{
+                    "role": "user",
+                    "content": f"{context}\\n\\nUser: {message}" if context else message
+                }]
+            )
+            result["response"] = msg.content[0].text
+        elif GEMINI_AVAILABLE:
+            model = get_gemini_client()
+            full_prompt = f"{VAULT_SYSTEM_PROMPT}\\n\\n"
+            if context:
+                full_prompt += f"Context: {context}\\n\\n"
+            full_prompt += f"User: {message}\\n\\nVault AI:"
+            
+            response = model.generate_content(full_prompt)
+            result["response"] = response.text.strip()
+        else:
+            result["response"] = "AI engines not available. Please configure API keys."
+            
     except Exception as e:
-        return f"I apologize, but I encountered an issue: {str(e)}. Please try again."
+        result["response"] = f"Error: {str(e)}"
+    
+    return result
 
-# Usage in your FastAPI route:
-# from gemini_chat import chat_with_vault_ai
-# response = await chat_with_vault_ai(user_message, context, scraped_content)
+async def fetch_url_content_standalone(url: str) -> str:
+    """Fetch and parse URL content for analysis"""
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            response = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            if response.status_code != 200:
+                return f"[Could not fetch: HTTP {response.status_code}]"
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            for tag in soup(['script', 'style', 'nav', 'footer']):
+                tag.decompose()
+            
+            title = soup.title.string if soup.title else "No title"
+            main = soup.find('main') or soup.find('article') or soup.body
+            text = main.get_text(separator=' ', strip=True) if main else ""
+            text = text[:2000] if len(text) > 2000 else text
+            
+            return f"URL: {url}\\nTitle: {title}\\nContent: {text}"
+    except Exception as e:
+        return f"[Error: {str(e)}]"
+
+# ============ EXAMPLE USAGE ============
+# In your FastAPI route:
+#
+# from dual_engine_ai import chat_with_dual_engine, detect_media_links
+#
+# @app.post("/api/chat")
+# async def chat(message: str):
+#     result = await chat_with_dual_engine(message)
+#     return {
+#         "response": result["response"],
+#         "model_used": result["model_used"],
+#         "media_analyses": result.get("media_analyses", [])
+#     }
 '''
-                (backend_dst / "gemini_chat.py").write_text(gemini_chat_code)
+                (backend_dst / "dual_engine_ai.py").write_text(dual_engine_code)
             
             # Create comprehensive README
             readme_content = """# NBA 2K Legacy Vault - Standalone Project
@@ -2321,13 +2754,24 @@ Do not use markdown formatting - respond in plain text only."""
 This is your complete, independent NBA 2K Legacy Vault application. 
 No platform dependencies - deploy it anywhere you want.
 
+## 🔥 Dual AI Engine System
+This project features a sophisticated dual-engine AI architecture:
+
+| Engine | Model | Use Case |
+|--------|-------|----------|
+| **Media Engine** | Claude 3.5 Sonnet | Deep analysis of YouTube, X, Facebook, TikTok, Instagram, Reddit content |
+| **Logic Engine** | Gemini 2.0 Flash | General commands, site management, quick responses |
+
+**Auto-Routing**: The system automatically detects media links and routes to Claude for deep analysis.
+
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Node.js 18+ (for frontend)
 - Python 3.10+ (for backend)
 - MongoDB (local or Atlas)
-- Gemini API key (free at https://makersuite.google.com/app/apikey)
+- Anthropic API key (for Claude - https://console.anthropic.com/)
+- Gemini API key (https://makersuite.google.com/app/apikey)
 
 ### Backend Setup
 ```bash
@@ -2338,7 +2782,7 @@ pip install -r requirements.txt
 
 # Configure environment
 cp .env.example .env
-# Edit .env with your MongoDB URL and Gemini API key
+# Edit .env with your MongoDB URL and API keys
 
 # Run server
 uvicorn server:app --reload --port 8001
@@ -2360,22 +2804,44 @@ npm start  # or: yarn start
 ## 🔧 Environment Variables
 
 ### Backend (.env)
-| Variable | Description | Example |
-|----------|-------------|---------|
-| MONGO_URL | MongoDB connection string | `mongodb://localhost:27017` |
-| DB_NAME | Database name | `nba2k_legacy_vault` |
-| GEMINI_API_KEY | Google Gemini API key | `AIza...` |
-| CORS_ORIGINS | Allowed frontend origins | `http://localhost:3000` |
-| ADMIN_PASSWORD | Admin panel password | `YourSecurePassword123` |
+| Variable | Description | Required |
+|----------|-------------|----------|
+| MONGO_URL | MongoDB connection string | Yes |
+| DB_NAME | Database name | Yes |
+| ANTHROPIC_API_KEY | Claude API key (Media Engine) | Yes |
+| GEMINI_API_KEY | Gemini API key (Logic Engine) | Yes |
+| CORS_ORIGINS | Allowed frontend origins | Yes |
+| ADMIN_PASSWORD | Admin panel password | Yes |
 
 ### Frontend (.env)
 | Variable | Description | Example |
 |----------|-------------|---------|
 | REACT_APP_BACKEND_URL | Backend API URL | `http://localhost:8001` |
 
+## 🤖 Dual AI Engine Integration
+
+### How It Works
+1. **User sends message** → System checks for media URLs
+2. **Media URLs detected** (YouTube, X, Facebook, etc.) → Routes to **Claude Media Engine**
+3. **Claude analyzes** → Returns structured analysis (title, sentiment, key points)
+4. **No media URLs** → Routes to **Gemini Logic Engine** for quick response
+5. **Response stored** with model metadata for chat history tracking
+
+### Example Usage
+```python
+from dual_engine_ai import chat_with_dual_engine
+
+# Auto-routes based on content
+result = await chat_with_dual_engine("Check this video https://youtube.com/...")
+# Uses Claude for deep media analysis
+
+result = await chat_with_dual_engine("What are the key features of 2K16?")
+# Uses Gemini for quick response
+```
+
 ## 📦 Deployment Options
 
-### Frontend → Vercel (Recommended)
+### Frontend → Vercel
 1. Push to GitHub
 2. Connect repo to Vercel
 3. Set `REACT_APP_BACKEND_URL` in Vercel environment variables
@@ -2385,23 +2851,12 @@ npm start  # or: yarn start
 1. Push to GitHub
 2. Create new Railway project
 3. Add MongoDB plugin (or use Atlas)
-4. Set environment variables
+4. Set all environment variables (including both API keys)
 5. Deploy!
-
-### Alternative: Render, Fly.io, DigitalOcean App Platform
-
-## 🤖 AI Chat Integration
-The Vault AI chatbot uses Google Gemini. To enable it:
-
-1. Get a free API key at https://makersuite.google.com/app/apikey
-2. Add to your backend `.env`: `GEMINI_API_KEY=your_key_here`
-3. The `gemini_chat.py` module handles all AI interactions
-
-To switch to a different AI provider, modify `gemini_chat.py`.
 
 ## 🔐 Admin Access
 - URL: `/admin`
-- Default password: `A@070610` (CHANGE THIS in .env!)
+- Default password: `A@070610` (CHANGE THIS!)
 
 ## 📱 PWA Support
 The app is a Progressive Web App. Users can install it on mobile/desktop.
@@ -2421,13 +2876,12 @@ theme: {
 }
 ```
 
-### Site Content
-All text content is stored in MongoDB and editable via the admin panel.
-Use the Content tab or Neplit commands.
+### AI Personality
+Edit `dual_engine_ai.py` → `VAULT_SYSTEM_PROMPT`
 
 ## 📄 License
 This project is yours. Use it however you want.
-Built with ❤️ for the NBA 2K community.
+Built for the NBA 2K community.
 """
             (export_dir / "README.md").write_text(readme_content)
             
